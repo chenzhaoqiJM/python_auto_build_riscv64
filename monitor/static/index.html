@@ -1,0 +1,621 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SpaceMIT Python Build Monitor</title>
+    <style>
+        :root {
+            --bg-primary: #0d1117;
+            --bg-secondary: #161b22;
+            --bg-tertiary: #21262d;
+            --text-primary: #c9d1d9;
+            --text-secondary: #8b949e;
+            --border-color: #30363d;
+            --accent-blue: #58a6ff;
+            --accent-green: #3fb950;
+            --accent-red: #f85149;
+            --accent-yellow: #d29922;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+        }
+
+        .header {
+            background: var(--bg-secondary);
+            border-bottom: 1px solid var(--border-color);
+            padding: 16px 24px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .header h1 {
+            font-size: 20px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .header h1::before {
+            content: '🐍';
+            font-size: 24px;
+        }
+
+        .stats-bar {
+            display: flex;
+            gap: 24px;
+        }
+
+        .stat {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+            cursor: pointer;
+            padding: 6px 12px;
+            border-radius: 6px;
+            transition: background 0.2s;
+        }
+
+        .stat:hover {
+            background: var(--bg-tertiary);
+        }
+
+        .stat.active {
+            background: var(--bg-tertiary);
+            border: 1px solid var(--accent-blue);
+        }
+
+        .stat-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+        }
+
+        .stat-dot.running {
+            background: var(--accent-yellow);
+            animation: pulse 1.5s infinite;
+        }
+
+        .stat-dot.success {
+            background: var(--accent-green);
+        }
+
+        .stat-dot.failed {
+            background: var(--accent-red);
+        }
+
+        @keyframes pulse {
+
+            0%,
+            100% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.5;
+            }
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 24px;
+        }
+
+        .filters {
+            display: flex;
+            gap: 16px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+
+        .filter-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .filter-group label {
+            font-size: 14px;
+            color: var(--text-secondary);
+        }
+
+        select,
+        button {
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            color: var(--text-primary);
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 14px;
+            cursor: pointer;
+        }
+
+        select:hover,
+        button:hover {
+            border-color: var(--accent-blue);
+        }
+
+        button.primary {
+            background: var(--accent-blue);
+            border-color: var(--accent-blue);
+            color: #fff;
+        }
+
+        .table-container {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th,
+        td {
+            padding: 12px 16px;
+            text-align: left;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        th {
+            background: var(--bg-tertiary);
+            font-weight: 600;
+            font-size: 12px;
+            text-transform: uppercase;
+            color: var(--text-secondary);
+        }
+
+        tr:hover {
+            background: var(--bg-tertiary);
+        }
+
+        tr:last-child td {
+            border-bottom: none;
+        }
+
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+
+        .status-badge.running {
+            background: rgba(210, 153, 34, 0.2);
+            color: var(--accent-yellow);
+        }
+
+        .status-badge.success {
+            background: rgba(63, 185, 80, 0.2);
+            color: var(--accent-green);
+        }
+
+        .status-badge.failed {
+            background: rgba(248, 81, 73, 0.2);
+            color: var(--accent-red);
+        }
+
+        .log-btn {
+            background: transparent;
+            border: 1px solid var(--border-color);
+            padding: 4px 10px;
+            font-size: 12px;
+        }
+
+        .log-btn:disabled {
+            opacity: 0.3;
+            cursor: not-allowed;
+        }
+
+        .machine-tag {
+            background: var(--bg-tertiary);
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-family: monospace;
+        }
+
+        .package-name {
+            font-weight: 500;
+            color: var(--accent-blue);
+        }
+
+        .time-cell {
+            font-size: 13px;
+            color: var(--text-secondary);
+            font-family: monospace;
+        }
+
+        /* Modal */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.7);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .modal-overlay.active {
+            display: flex;
+        }
+
+        .modal {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            width: 90%;
+            max-width: 1000px;
+            max-height: 85vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 16px 20px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .modal-header h2 {
+            font-size: 16px;
+            font-weight: 600;
+        }
+
+        .modal-close {
+            background: none;
+            border: none;
+            font-size: 24px;
+            cursor: pointer;
+            color: var(--text-secondary);
+        }
+
+        .modal-body {
+            flex: 1;
+            overflow: auto;
+            padding: 0;
+        }
+
+        .log-content {
+            font-family: 'Fira Code', 'Consolas', monospace;
+            font-size: 13px;
+            line-height: 1.5;
+            white-space: pre-wrap;
+            word-break: break-all;
+            padding: 16px;
+            margin: 0;
+            background: #0d1117;
+            color: #e6edf3;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: var(--text-secondary);
+        }
+
+        .auto-refresh {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+            color: var(--text-secondary);
+        }
+
+        .auto-refresh input {
+            width: 16px;
+            height: 16px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="header">
+        <h1>SpaceMIT Python Build Monitor</h1>
+        <div class="stats-bar">
+            <div class="stat" onclick="filterByStatus('running')" id="stat-running-wrap">
+                <span class="stat-dot running"></span>
+                <span id="stat-running">0</span> 进行中
+            </div>
+            <div class="stat" onclick="filterByStatus('success')" id="stat-success-wrap">
+                <span class="stat-dot success"></span>
+                <span id="stat-success">0</span> 成功
+            </div>
+            <div class="stat" onclick="filterByStatus('failed')" id="stat-failed-wrap">
+                <span class="stat-dot failed"></span>
+                <span id="stat-failed">0</span> 失败
+            </div>
+            <div class="stat" onclick="filterByStatus('')" style="color: var(--text-secondary);">
+                🔄 全部
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="filters">
+            <div class="filter-group">
+                <label>机器:</label>
+                <select id="filter-machine">
+                    <option value="">全部</option>
+                </select>
+            </div>
+            <div class="filter-group">
+                <label>状态:</label>
+                <select id="filter-status">
+                    <option value="">全部</option>
+                    <option value="running">进行中</option>
+                    <option value="success">成功</option>
+                    <option value="failed">失败</option>
+                </select>
+            </div>
+            <button class="primary" onclick="loadBuilds()">刷新</button>
+            <div class="auto-refresh">
+                <input type="checkbox" id="auto-refresh" checked>
+                <label for="auto-refresh">自动刷新 (10s)</label>
+            </div>
+        </div>
+
+        <div class="table-container">
+            <table>
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>机器</th>
+                        <th>包名</th>
+                        <th>脚本</th>
+                        <th>Python</th>
+                        <th>状态</th>
+                        <th>开始时间</th>
+                        <th>结束时间</th>
+                        <th>日志</th>
+                    </tr>
+                </thead>
+                <tbody id="builds-table">
+                    <tr>
+                        <td colspan="9" class="empty-state">加载中...</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Log Modal -->
+    <div class="modal-overlay" id="log-modal">
+        <div class="modal">
+            <div class="modal-header">
+                <h2 id="log-title">构建日志</h2>
+                <button class="modal-close" onclick="closeLogModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <pre class="log-content" id="log-content">加载中...</pre>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = '';
+        let refreshTimer = null;
+
+        // 格式化时间
+        function formatTime(isoStr) {
+            if (!isoStr) return '-';
+            const d = new Date(isoStr);
+            return d.toLocaleString('zh-CN', {
+                month: '2-digit',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit'
+            });
+        }
+
+        // 状态徽章
+        function statusBadge(status) {
+            const labels = { running: '🔄 进行中', success: '✅ 成功', failed: '❌ 失败' };
+            return `<span class="status-badge ${status}">${labels[status] || status}</span>`;
+        }
+
+        // 加载构建列表
+        async function loadBuilds() {
+            const machine = document.getElementById('filter-machine').value;
+            const status = document.getElementById('filter-status').value;
+
+            let url = `${API_BASE}/api/builds?limit=200`;
+            if (machine) url += `&machine=${encodeURIComponent(machine)}`;
+            if (status) url += `&status=${encodeURIComponent(status)}`;
+
+            try {
+                const res = await fetch(url);
+                const builds = await res.json();
+                renderBuilds(builds);
+            } catch (e) {
+                console.error('Failed to load builds:', e);
+            }
+        }
+
+        // 渲染构建列表
+        function renderBuilds(builds) {
+            const tbody = document.getElementById('builds-table');
+
+            if (builds.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="9" class="empty-state">暂无构建记录</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = builds.map(b => `
+                <tr>
+                    <td>${b.id}</td>
+                    <td><span class="machine-tag">${b.machine}</span></td>
+                    <td><span class="package-name">${b.package}</span></td>
+                    <td>${b.script || '-'}</td>
+                    <td>${b.python_version || '-'}</td>
+                    <td>${statusBadge(b.status)}</td>
+                    <td class="time-cell">${formatTime(b.start_time)}</td>
+                    <td class="time-cell">${formatTime(b.end_time)}</td>
+                    <td>
+                        <button class="log-btn" 
+                            ${b.log_file ? '' : 'disabled'} 
+                            onclick="viewLog(${b.id}, '${b.package}')">
+                            查看
+                        </button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        // 加载统计
+        async function loadStats() {
+            try {
+                const res = await fetch(`${API_BASE}/api/stats`);
+                const stats = await res.json();
+                document.getElementById('stat-running').textContent = stats.running;
+                document.getElementById('stat-success').textContent = stats.success;
+                document.getElementById('stat-failed').textContent = stats.failed;
+            } catch (e) {
+                console.error('Failed to load stats:', e);
+            }
+        }
+
+        // 加载机器列表（保留当前选择）
+        async function loadMachines() {
+            try {
+                const res = await fetch(`${API_BASE}/api/machines`);
+                const machines = await res.json();
+                const select = document.getElementById('filter-machine');
+                const currentValue = select.value;  // 保存当前选择
+
+                // 清除除"全部"外的选项
+                while (select.options.length > 1) {
+                    select.remove(1);
+                }
+
+                // 添加新机器
+                machines.forEach(m => {
+                    const opt = document.createElement('option');
+                    opt.value = m;
+                    opt.textContent = m;
+                    select.appendChild(opt);
+                });
+
+                // 恢复之前的选择（如果仍存在）
+                if (currentValue && machines.includes(currentValue)) {
+                    select.value = currentValue;
+                }
+            } catch (e) {
+                console.error('Failed to load machines:', e);
+            }
+        }
+
+        // 通过点击统计栏筛选状态
+        function filterByStatus(status) {
+            document.getElementById('filter-status').value = status;
+
+            // 更新统计栏高亮
+            document.querySelectorAll('.stats-bar .stat').forEach(el => el.classList.remove('active'));
+            if (status === 'running') document.getElementById('stat-running-wrap').classList.add('active');
+            else if (status === 'success') document.getElementById('stat-success-wrap').classList.add('active');
+            else if (status === 'failed') document.getElementById('stat-failed-wrap').classList.add('active');
+
+            loadBuilds();
+        }
+
+        // 机器选择变化时自动刷新
+        document.getElementById('filter-machine').addEventListener('change', loadBuilds);
+        document.getElementById('filter-status').addEventListener('change', function () {
+            // 同步更新统计栏高亮
+            const status = this.value;
+            document.querySelectorAll('.stats-bar .stat').forEach(el => el.classList.remove('active'));
+            if (status === 'running') document.getElementById('stat-running-wrap').classList.add('active');
+            else if (status === 'success') document.getElementById('stat-success-wrap').classList.add('active');
+            else if (status === 'failed') document.getElementById('stat-failed-wrap').classList.add('active');
+            loadBuilds();
+        });
+
+        // 查看日志
+        async function viewLog(buildId, packageName) {
+            document.getElementById('log-modal').classList.add('active');
+            document.getElementById('log-title').textContent = `构建日志 - ${packageName} (#${buildId})`;
+            document.getElementById('log-content').textContent = '加载中...';
+
+            try {
+                const res = await fetch(`${API_BASE}/api/build/${buildId}/log`);
+                const text = await res.text();
+                document.getElementById('log-content').textContent = text;
+            } catch (e) {
+                document.getElementById('log-content').textContent = '加载失败: ' + e.message;
+            }
+        }
+
+        // 关闭日志弹窗
+        function closeLogModal() {
+            document.getElementById('log-modal').classList.remove('active');
+        }
+
+        // 自动刷新
+        function setupAutoRefresh() {
+            const checkbox = document.getElementById('auto-refresh');
+
+            function toggleRefresh() {
+                if (refreshTimer) {
+                    clearInterval(refreshTimer);
+                    refreshTimer = null;
+                }
+                if (checkbox.checked) {
+                    refreshTimer = setInterval(() => {
+                        loadBuilds();
+                        loadStats();
+                        loadMachines();  // 也刷新机器列表
+                    }, 10000);
+                }
+            }
+
+            checkbox.addEventListener('change', toggleRefresh);
+            toggleRefresh();
+        }
+
+        // ESC 关闭弹窗
+        document.addEventListener('keydown', e => {
+            if (e.key === 'Escape') closeLogModal();
+        });
+
+        // 点击遮罩关闭
+        document.getElementById('log-modal').addEventListener('click', e => {
+            if (e.target.classList.contains('modal-overlay')) closeLogModal();
+        });
+
+        // 初始化
+        loadMachines();
+        loadBuilds();
+        loadStats();
+        setupAutoRefresh();
+    </script>
+</body>
+
+</html>
