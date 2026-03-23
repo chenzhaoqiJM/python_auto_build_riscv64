@@ -243,7 +243,7 @@ while true; do
         unload_env
         echo "✅ Done for $PACKAGE_NAME"
         echo "---------------------------------------------"
-    done < "$PACKAGE_LIST"
+    done < <(shuf "$PACKAGE_LIST")
 
     echo "🎉 All done!"
     if [ -s "$FAILED_LIST" ]; then

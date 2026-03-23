@@ -270,7 +270,7 @@ while true; do
 
         rm -rf "$VERSION_FILE" || echo "Failed to remove $VERSION_FILE"
 
-    done < "$ALL_PKGS_LIST"
+    done < <(shuf "$ALL_PKGS_LIST")
 
     echo "🎉 All done!"
     if [ -s "$FAILED_LIST" ]; then
