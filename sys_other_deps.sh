@@ -4,6 +4,25 @@ set -u  # 使用未定义变量时报错
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+CPUINFO_CONTENT="$(cat /proc/cpuinfo)"
+
+if grep -q "model name.*Spacemit(R) X60" <<< "$CPUINFO_CONTENT"; then
+    CPU_VARIANT="K1"
+    EXTRA_INDEX_URL="https://git.spacemit.com/api/v4/projects/33/packages/pypi/simple"
+    SOURCE_FILE="$SCRIPT_DIR/pypirc.txt"
+elif grep -q "model name.*Spacemit(R) X100\|model name.*Spacemit(R) A100" <<< "$CPUINFO_CONTENT"; then
+    CPU_VARIANT="K3"
+    EXTRA_INDEX_URL="https://git.spacemit.com/api/v4/projects/81/packages/pypi/simple"
+    SOURCE_FILE="$SCRIPT_DIR/pypirc_k3.txt"
+else
+    echo "❌ 无法识别 CPU 型号，默认使用 K1 PyPI 源配置, 请确保你使用的是 Bianbu2.2/Bianbu2.3/Bianbu3.0 版本的镜像"
+    CPU_VARIANT="X86"
+    EXTRA_INDEX_URL="https://git.spacemit.com/api/v4/projects/33/packages/pypi/simple"
+    SOURCE_FILE="$SCRIPT_DIR/pypirc.txt"
+fi
+
+echo "✅ 检测到 CPU 平台: $CPU_VARIANT"
+
 
 # 获取 glibc 版本号（只取主次版本号，如 2.39、2.41）
 GLIBC_VERSION=$(ldd --version 2>&1 \
@@ -25,10 +44,6 @@ case "$GLIBC_VERSION" in
         ;;
 esac
 
-
-set +e  # 临时关闭 set -e
-sudo apt remove -y python3-numpy python3-scipy
-set -e
 
 GCC_MAJOR=$(gcc -dumpfullversion | cut -d. -f1)
 
@@ -64,13 +79,12 @@ fi
 echo "✅ Python deb 依赖安装完成"
 
 pip config set global.index-url https://mirrors.aliyun.com/pypi/simple/
-pip config set global.extra-index-url https://git.spacemit.com/api/v4/projects/33/packages/pypi/simple
+pip config set global.extra-index-url "$EXTRA_INDEX_URL"
 
 # 支持uv
 curl -LsSf https://astral.sh/uv/install.sh | sh
 
 PYPIRC_PATH="$HOME/.pypirc"
-SOURCE_FILE="$SCRIPT_DIR/pypirc.txt"
 
 # 如果目标文件存在则删除
 if [ -f "$PYPIRC_PATH" ]; then
@@ -85,11 +99,6 @@ cp "$SOURCE_FILE" "$PYPIRC_PATH"
 sleep 3
 
 # 下载第三方库 ------------------------------------------------------------------------------------------------
-# 获取 glibc 版本号（只取主次版本号，如 2.39、2.41）
-GLIBC_VERSION=$(ldd --version 2>&1 \
-    | grep -oE '[0-9]+\.[0-9]+' \
-    | head -n1)
-
 case "$GLIBC_VERSION" in
     "2.39")
         EXT_PREFIX="bianbu24"
@@ -154,11 +163,14 @@ download_targz_all "$BASE_URL/arrow" apache-arrow arrow
 # ffmpeg
 download_targz_all "$BASE_URL/ffmpeg" ffmpeg ffmpeg
 
-# # mujoco
+# mujoco
 download_targz_all "$BASE_URL/mujoco" mujoco mujoco
 
-# # mujoco
+# cyclonedds
 download_targz_all "$BASE_URL/cyclonedds" cyclonedds cyclonedds
+
+# faiss
+download_targz_all "$BASE_URL/faiss" faiss faiss
 
 echo "✅ 第三方库下载完成"
 set -e

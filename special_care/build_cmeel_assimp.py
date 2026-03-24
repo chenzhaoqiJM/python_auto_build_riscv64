@@ -22,7 +22,9 @@ def clone_or_update_repo(git_dir: Path):
 
     if git_dir.exists():
         print(f"📂 仓库已存在: {git_dir}")
-        print("🔄 更新仓库...")
+        print("🔄 拉取最新代码...")
+        subprocess.run(["git", "pull", "--ff-only"], check=True, cwd=git_dir)
+        print("🏷️ 更新 tags...")
         subprocess.run(["git", "fetch", "--all", "--tags"], check=True, cwd=git_dir)
     else:
         print(f"📥 克隆仓库到: {git_dir}")
@@ -100,9 +102,6 @@ def build_cmeel_assimp_func(package_spec: str, wheel_dir: str):
     # 查找匹配的 tag
     tag = find_matching_tag(git_dir, version)
 
-    # 切换到对应版本
-    checkout_version(git_dir, tag)
-
     # 使用临时目录进行构建
     with tempfile.TemporaryDirectory() as tmpdir:
         try:
@@ -110,6 +109,9 @@ def build_cmeel_assimp_func(package_spec: str, wheel_dir: str):
             tmp_source = Path(tmpdir) / "cmeel-assimp"
             print(f"📋 复制源码到临时目录: {tmp_source}")
             shutil.copytree(git_dir, tmp_source, symlinks=True)
+
+            # 在临时目录切换到对应版本，避免污染缓存仓库
+            checkout_version(tmp_source, tag)
 
             # 构建 wheel
             build_wheel(tmp_source, wheel_dir)
