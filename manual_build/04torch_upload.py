@@ -23,10 +23,17 @@ PIP_CACHE_DIR = Path(os.path.expanduser(pip_cache_dir))
 WHEELS_REPAIR_DIR = Path(os.path.expanduser(f"~/wheels_repair/build_{pkg_name}"))
 RECORD_FILE = Path(os.path.expanduser("~/.upload_whl_log.txt"))
 PYPI_REPO = "gitlab"
+OUTPUT_MODE = os.environ.get("TORCH_WHL_OUTPUT_MODE", "upload").strip().lower()
+SAVE_HOME_DIR = Path(os.path.expanduser(os.environ.get("TORCH_WHL_SAVE_DIR", "~")))
 
 # 保证目录存在
 PIP_CACHE_DIR.mkdir(parents=True, exist_ok=True)
 WHEELS_REPAIR_DIR.mkdir(parents=True, exist_ok=True)
+SAVE_HOME_DIR.mkdir(parents=True, exist_ok=True)
+
+if OUTPUT_MODE not in {"upload", "save"}:
+    print(f"⚠️  Invalid TORCH_WHL_OUTPUT_MODE={OUTPUT_MODE!r}, fallback to 'upload'")
+    OUTPUT_MODE = "upload"
 
 def find_built_wheels():
     print(f"🔍 Searching for built wheels in pip cache {PIP_CACHE_DIR}...")
@@ -120,6 +127,13 @@ def upload_whl(whl_path: Path):
     with open(RECORD_FILE, "a") as f:
         f.write(f"{datetime.now()} {whl_path.name}\n")
 
+def save_whl_to_home(whl_path: Path):
+    target_path = SAVE_HOME_DIR / whl_path.name
+    print(f"💾 Saving {whl_path.name} to: {target_path}")
+    shutil.copy2(whl_path, target_path)
+    with open(RECORD_FILE, "a") as f:
+        f.write(f"{datetime.now()} saved {whl_path.name} -> {target_path}\n")
+
 def clean_dirs():
     print("🧹 Cleaning pip cache and repaired wheels directories...")
     shutil.rmtree(PIP_CACHE_DIR, ignore_errors=True)
@@ -136,7 +150,10 @@ def main():
             try:
                 final_whl = try_auditwheel_repair(whl)
                 process_whl_rpath(str(final_whl))
-                upload_whl(final_whl)
+                if OUTPUT_MODE == "save":
+                    save_whl_to_home(final_whl)
+                else:
+                    upload_whl(final_whl)
             except subprocess.CalledProcessError:
                 print(f"⚠️  Upload failed for {whl.name}")
             except Exception as e:

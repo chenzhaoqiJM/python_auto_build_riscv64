@@ -3,7 +3,6 @@ set -e
 
 # 当前脚本目录
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-
 # 加载公共函数
 source "$SCRIPT_DIR/../common_func.sh"
 
@@ -17,34 +16,28 @@ echo "开始构建 Python $BUILD_FOR_VERSION ..."
 # 下面继续构建逻辑
 
 # 可配置字段
-export PIP_CACHE_DIR="$HOME/.cache/pip/wheels_hp_uv_$BUILD_FOR_VERSION"
-export WHEELS_REPAIR_DIR="$HOME/.mywheel_repair/hp_uv_$BUILD_FOR_VERSION"
-BUILD_TMPDIR="$HOME/.mytmp/hp_uv_$BUILD_FOR_VERSION"
-VENV_NAME="hp_uv_$BUILD_FOR_VERSION"
+export PIP_CACHE_DIR="$HOME/.cache/pip/wheels_auto_uv_$BUILD_FOR_VERSION"
+export WHEELS_REPAIR_DIR="$HOME/.mywheel_repair/auto_uv_$BUILD_FOR_VERSION"
+BUILD_TMPDIR="$HOME/.mytmp/auto_uv_$BUILD_FOR_VERSION"
+VENV_NAME="tmpbuild_auto_uv_$BUILD_FOR_VERSION"
 VENV_DIR="$HOME/pyenvs/$VENV_NAME"
 DIST_DIR="$HOME/pyenvs/store"
-WHEEL_CACHE_DIR="$HOME/.mywheels/hp_uv_$BUILD_FOR_VERSION"
-PACKAGE_LIST="$SCRIPT_DIR/hp_pkgs.txt"
-FAILED_LIST="$SCRIPT_DIR/failed_hp_$BUILD_FOR_VERSION.log"
-
+WHEEL_CACHE_DIR="$HOME/.mywheels/auto_uv_$BUILD_FOR_VERSION"
+PACKAGE_LIST="$SCRIPT_DIR/top_pypi_package_names.txt"
+FAILED_LIST="$SCRIPT_DIR/failed_$BUILD_FOR_VERSION.log"
 UPLOAD_SCRIPT="$SCRIPT_DIR/../common_py/00upload_with_repair.py"
+SKIP_LIST="$SCRIPT_DIR/../common_py/skip_pkgs.txt"
 SPECIAL_BUILDER_SCRIPT="$SCRIPT_DIR/../special_care/special_builder.py"
 NO_DEPS_SCRIPT="$SCRIPT_DIR/../common_py/check_no_deps.py"
 FETCH_VERSION_SCRIPT="$SCRIPT_DIR/../common_py/02get_latest_version.py"
+
 UPDATE_LIBS_SH="$SCRIPT_DIR/../update_libs.sh"
 
-# 单包构建超时（默认24小时）
-BUILD_TIMEOUT_SECONDS=$((24 * 60 * 60))
-
-if ! command -v timeout >/dev/null 2>&1; then
-    echo "❌ 'timeout' command not found. Please install coreutils."
-    exit 1
-fi
 
 # 创建必要目录
 mkdir -p "$BUILD_TMPDIR" "$WHEEL_CACHE_DIR" "$DIST_DIR"
 
-# 编译相关参数
+
 export TMPDIR="$BUILD_TMPDIR"
 export PYTHONPATH="$VENV_DIR/lib/python$BUILD_FOR_VERSION/site-packages"
 echo "&&&- set PYTHONPATH to: $PYTHONPATH"
@@ -59,6 +52,11 @@ source "$SCRIPT_DIR/../env_common.sh"
 echo "LD_LIBRARY_PATH = $LD_LIBRARY_PATH"
 echo "LLVM_CONFIG = $LLVM_CONFIG"
 
+
+if [ ! -f "$PACKAGE_LIST" ]; then
+    echo "❌ File not found: $PACKAGE_LIST"
+    exit 1
+fi
 
 # 清理旧虚拟环境
 if [ -d "$VENV_DIR" ]; then
@@ -79,7 +77,7 @@ else
     deactivate
     source "$VENV_DIR/bin/activate"
     pip install --upgrade --verbose setuptools wheel build twine auditwheel
-    pip install --verbose --prefer-binary numpy maturin scipy pyelftools pybind11 Cython
+    pip install --verbose --prefer-binary numpy maturin scipy pyelftools pybind11 Cython beautifulsoup4 lxml
 
     REQUIRED_PKGS=("setuptools" "wheel" "build" "twine" "auditwheel")
     for pkg in "${REQUIRED_PKGS[@]}"; do
@@ -114,15 +112,13 @@ else
     rm -rf "$BUILD_TMPDIR"/* || echo "❌ Failed to remove build tmp"
 fi
 
+
 # 无限循环处理包
 while true; do
     echo "⏳ Starting new round at $(date)"
-    > "$FAILED_LIST"
 
-    if [ ! -f "$PACKAGE_LIST" ]; then
-        echo "❌ File not found: $PACKAGE_LIST"
-        exit 1
-    fi
+    # 清空失败记录
+    > "$FAILED_LIST"
 
     while IFS= read -r PACKAGE_NAME || [[ -n "$PACKAGE_NAME" ]]; do
         PACKAGE_NAME=$(echo "$PACKAGE_NAME" | xargs)
@@ -132,10 +128,27 @@ while true; do
 
         PACKAGE_NAME=$(python3 "$FETCH_VERSION_SCRIPT" "$PACKAGE_NAME")
 
+        # if [ -f "$SKIP_LIST" ] && grep -Fxq "$PACKAGE_NAME" "$SKIP_LIST"; then
+        #     echo "⏭️  Skipping $PACKAGE_NAME (in skip list)"
+        #     echo "---------------------------------------------"
+        #     continue
+        # fi
+
+        if [ -f "$SKIP_LIST" ]; then
+            while read -r pattern; do
+                case "$PACKAGE_NAME" in
+                    $pattern)
+                        echo "⏭️  Skipping $PACKAGE_NAME (in skip list)"
+                        echo "---------------------------------------------"
+                        continue 2
+                        ;;
+                esac
+            done < "$SKIP_LIST"
+        fi
+
         echo "🔁 Processing $PACKAGE_NAME"
 
-        # 清理旧环境
-        echo "🧹 Cleaning tmp build and venv..."
+        echo "Removing tmp..........."
         command -v deactivate &>/dev/null && deactivate || true
         rm -rf "$VENV_DIR" || echo "❌ Failed to remove venv"
         rm -rf "$BUILD_TMPDIR"/* || echo "❌ Failed to remove build tmp"
@@ -150,14 +163,11 @@ while true; do
         load_env
         echo "LD_LIBRARY_PATH=${LD_LIBRARY_PATH}"
 
-        echo "🔨 Building wheel for $PACKAGE_NAME ..."
-
-        # 下载源码构建，适应于需要patch代码的情况
+        # 特殊构建路径
         build_with_special_python() {
             echo "⚙️  Checking for special build path for $PACKAGE_NAME"
 
-            timeout --foreground --kill-after=60s "${BUILD_TIMEOUT_SECONDS}s" \
-                python3 "$SPECIAL_BUILDER_SCRIPT" "$PACKAGE_NAME" "$WHEEL_CACHE_DIR"
+            python3 "$SPECIAL_BUILDER_SCRIPT" "$PACKAGE_NAME" "$WHEEL_CACHE_DIR"
             exit_code=$?
 
             if [[ $exit_code -eq 0 ]]; then
@@ -166,11 +176,6 @@ while true; do
             elif [[ $exit_code -eq 100 ]]; then
                 echo "ℹ️  $PACKAGE_NAME not handled specially, fallback to generic build"
                 return 100
-            elif [[ $exit_code -eq 124 ]]; then
-                echo "⏰ Timeout (>24h), skip package: $PACKAGE_NAME"
-                echo "$PACKAGE_NAME" >> "$FAILED_LIST"
-                deactivate || true
-                return 124
             else
                 echo "❌ Special builder failed: $PACKAGE_NAME"
                 echo "$PACKAGE_NAME" >> "$FAILED_LIST"
@@ -184,16 +189,7 @@ while true; do
             NO_DEPS=$(python3 "$NO_DEPS_SCRIPT" "$PACKAGE_NAME")
             echo "⚙️  Extra pip flags: $NO_DEPS"
 
-            timeout --foreground --kill-after=60s "${BUILD_TIMEOUT_SECONDS}s" \
-                pip wheel --verbose $NO_DEPS --wheel-dir="$WHEEL_CACHE_DIR" "$PACKAGE_NAME"
-            build_exit_code=$?
-
-            if [[ $build_exit_code -eq 124 ]]; then
-                echo "⏰ Timeout (>24h), skip package: $PACKAGE_NAME"
-                echo "$PACKAGE_NAME" >> "$FAILED_LIST"
-                deactivate || true
-                return 124
-            elif [[ $build_exit_code -ne 0 ]]; then
+            if ! pip wheel --verbose $NO_DEPS --wheel-dir="$WHEEL_CACHE_DIR" "$PACKAGE_NAME"; then
                 echo "❌ Failed: $PACKAGE_NAME"
                 echo "$PACKAGE_NAME" >> "$FAILED_LIST"
                 deactivate || true
@@ -220,10 +216,6 @@ while true; do
                 unload_env
                 continue
             fi
-        elif [[ $exit_code -eq 124 ]]; then
-            set -e
-            unload_env
-            continue
         else
             set -e
             unload_env
@@ -233,6 +225,7 @@ while true; do
         set -e
         # func select ---------------------------------------------
 
+        # 调用上传脚本（如果存在）
         if [ -f "$UPLOAD_SCRIPT" ]; then
             echo "🚀 Running upload script for $PACKAGE_NAME"
             python "$UPLOAD_SCRIPT"
@@ -240,25 +233,25 @@ while true; do
             echo "⚠️  Upload script not found: $UPLOAD_SCRIPT"
         fi
 
-        deactivate
+        deactivate || true
         sleep 2
         unload_env
         echo "✅ Done for $PACKAGE_NAME"
-        echo "-------------------------------------------------------------------"
+        echo "---------------------------------------------"
     done < "$PACKAGE_LIST"
 
-    echo "🎉 Round finished at $(date)"
+    echo "🎉 All done!"
     if [ -s "$FAILED_LIST" ]; then
         echo "❗ Some packages failed:"
         cat "$FAILED_LIST"
     else
-        echo "✅ All packages installed successfully!"
+        echo "✅ All packages built and processed successfully!"
     fi
 
     # 更新第三方库
     echo "🔄 Updating third-party libraries..."
     bash "$UPDATE_LIBS_SH" || echo "⚠️ Failed to update libs"
 
-    echo "🕒 Sleeping for 2 hours..."
-    sleep 7200
+    echo "🕒 Sleeping for 4 hours..."
+    sleep 14400
 done

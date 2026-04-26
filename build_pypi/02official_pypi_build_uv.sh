@@ -33,6 +33,14 @@ FETCH_VERSION_SCRIPT="$SCRIPT_DIR/../common_py/02get_latest_version.py"
 
 UPDATE_LIBS_SH="$SCRIPT_DIR/../update_libs.sh"
 
+# 单包构建超时（默认24小时）
+BUILD_TIMEOUT_SECONDS=$((24 * 60 * 60))
+
+if ! command -v timeout >/dev/null 2>&1; then
+    echo "❌ 'timeout' command not found. Please install coreutils."
+    exit 1
+fi
+
 
 # 创建必要目录
 mkdir -p "$BUILD_TMPDIR" "$WHEEL_CACHE_DIR" "$DIST_DIR"
@@ -167,7 +175,8 @@ while true; do
         build_with_special_python() {
             echo "⚙️  Checking for special build path for $PACKAGE_NAME"
 
-            python3 "$SPECIAL_BUILDER_SCRIPT" "$PACKAGE_NAME" "$WHEEL_CACHE_DIR"
+            timeout --foreground --kill-after=60s "${BUILD_TIMEOUT_SECONDS}s" \
+                python3 "$SPECIAL_BUILDER_SCRIPT" "$PACKAGE_NAME" "$WHEEL_CACHE_DIR"
             exit_code=$?
 
             if [[ $exit_code -eq 0 ]]; then
@@ -176,6 +185,11 @@ while true; do
             elif [[ $exit_code -eq 100 ]]; then
                 echo "ℹ️  $PACKAGE_NAME not handled specially, fallback to generic build"
                 return 100
+            elif [[ $exit_code -eq 124 ]]; then
+                echo "⏰ Timeout (>24h), skip package: $PACKAGE_NAME"
+                echo "$PACKAGE_NAME" >> "$FAILED_LIST"
+                deactivate || true
+                return 124
             else
                 echo "❌ Special builder failed: $PACKAGE_NAME"
                 echo "$PACKAGE_NAME" >> "$FAILED_LIST"
@@ -189,7 +203,16 @@ while true; do
             NO_DEPS=$(python3 "$NO_DEPS_SCRIPT" "$PACKAGE_NAME")
             echo "⚙️  Extra pip flags: $NO_DEPS"
 
-            if ! pip wheel --verbose $NO_DEPS --wheel-dir="$WHEEL_CACHE_DIR" "$PACKAGE_NAME"; then
+            timeout --foreground --kill-after=60s "${BUILD_TIMEOUT_SECONDS}s" \
+                pip wheel --verbose $NO_DEPS --wheel-dir="$WHEEL_CACHE_DIR" "$PACKAGE_NAME"
+            build_exit_code=$?
+
+            if [[ $build_exit_code -eq 124 ]]; then
+                echo "⏰ Timeout (>24h), skip package: $PACKAGE_NAME"
+                echo "$PACKAGE_NAME" >> "$FAILED_LIST"
+                deactivate || true
+                return 124
+            elif [[ $build_exit_code -ne 0 ]]; then
                 echo "❌ Failed: $PACKAGE_NAME"
                 echo "$PACKAGE_NAME" >> "$FAILED_LIST"
                 deactivate || true
@@ -216,6 +239,10 @@ while true; do
                 unload_env
                 continue
             fi
+        elif [[ $exit_code -eq 124 ]]; then
+            set -e
+            unload_env
+            continue
         else
             set -e
             unload_env

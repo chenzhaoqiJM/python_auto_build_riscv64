@@ -17,16 +17,33 @@ echo "开始构建 Python $BUILD_FOR_VERSION ..."
 # 下面继续构建逻辑
 
 # =============================== 需要构建的版本
-TO_BUILD_VERSIONS=("2.7.1" "2.7.0" "2.6.0" "2.5.1" "2.5.0" "2.4.1" "2.4.0")
+TO_BUILD_VERSIONS=("2.7.1" "2.8.0" "2.9.0")
 
 # =============================== 构建变量
 export PYTORCH_BUILD_NUMBER=0
 export PKG_NAME="torch"
 
+if [[ -z "${TORCH_WHL_OUTPUT_MODE:-}" ]]; then
+    echo "❌ ERROR: 必须设置 TORCH_WHL_OUTPUT_MODE，可选值: save、upload"
+    echo "示例: TORCH_WHL_OUTPUT_MODE=upload $0"
+    exit 1
+fi
+
+case "$TORCH_WHL_OUTPUT_MODE" in
+    save|upload)
+        echo "📦 TORCH_WHL_OUTPUT_MODE=$TORCH_WHL_OUTPUT_MODE"
+        ;;
+    *)
+        echo "❌ ERROR: TORCH_WHL_OUTPUT_MODE 只能是 save 或 upload，当前值: $TORCH_WHL_OUTPUT_MODE"
+        exit 1
+        ;;
+esac
+
 # =============================== 下载源码
 DOWNLOAD_SRC_SH="$SCRIPT_DIR/../download_extract_user.sh"
 
 SOURCE_TARGET_DIR=$HOME/whl_build/pytorch
+SOURCE_WORK_BASE_DIR=$HOME/whl_build/pytorch_build_worktrees
 
 ## 下载源码
 if [ ! -d "$SOURCE_TARGET_DIR" ]; then
@@ -35,9 +52,21 @@ else
     echo "📦 $SOURCE_TARGET_DIR 已存在，跳过下载和解压"
 fi
 
+if [ -d "$SOURCE_TARGET_DIR/.git" ]; then
+    echo "🔄 更新源码仓库..."
+    (
+        cd "$SOURCE_TARGET_DIR" || exit 1
+        git pull
+    ) || {
+        echo "❌ ERROR: git pull 失败: $SOURCE_TARGET_DIR"
+    }
+else
+    echo "⚠️  $SOURCE_TARGET_DIR 不是 git 仓库，跳过 git pull"
+fi
+
 # =============================== 上传脚本相关
-UPLOAD_SCRIPT="$SCRIPT_DIR/04torch_upload.py" 
-CHECK_EXIST_SCRIPT="$SCRIPT_DIR/../special_care/check_whl_exist.py" 
+UPLOAD_SCRIPT="$SCRIPT_DIR/04torch_upload.py"
+CHECK_EXIST_SCRIPT="$SCRIPT_DIR/../special_care/check_whl_exist.py"
 
 # =============================== 构建环境相关
 export PIP_CACHE_DIR="$HOME/.cache/pip/wheels_${PKG_NAME}_uv_$BUILD_FOR_VERSION"
@@ -47,7 +76,7 @@ VENV_DIR="$HOME/pyenvs/$VENV_NAME"
 WHEEL_CACHE_DIR="$HOME/.mywheels/${PKG_NAME}_uv_$BUILD_FOR_VERSION"
 DIST_DIR="$HOME/pyenvs/store"
 
-mkdir -p "$BUILD_TMPDIR" "$WHEEL_CACHE_DIR" "$DIST_DIR"
+mkdir -p "$BUILD_TMPDIR" "$WHEEL_CACHE_DIR" "$DIST_DIR" "$SOURCE_WORK_BASE_DIR"
 
 export WHEEL_CACHE_DIR_PY="$WHEEL_CACHE_DIR"
 export TMPDIR="$BUILD_TMPDIR"
@@ -76,7 +105,7 @@ if [ -d "$DIST_DIR/$VENV_NAME" ]; then
     echo "✅ Cached virtualenv ready at $DIST_DIR"
 else
     echo "📦 Creating new virtualenv at $VENV_DIR"
-    
+
     uv venv "$VENV_DIR" --python=$BUILD_FOR_VERSION
 
     source "$VENV_DIR/bin/activate"
@@ -128,16 +157,18 @@ for version in "${TO_BUILD_VERSIONS[@]}"; do
 
     echo "🔨 Building wheel for $PKG_NAME==$version ..."
 
+    BUILD_SOURCE_DIR="$SOURCE_WORK_BASE_DIR/${PKG_NAME}_src_${version}_py${BUILD_FOR_VERSION}"
+
     ## 查看是否有 whl 包
-    set +e 
-    python3 $CHECK_EXIST_SCRIPT "$PKG_NAME==$version"
-    if [ $? -eq 0 ]; then
-        echo "已有 wheel $PKG_NAME==$version"
-        continue
-    else
-        echo "需要构建"
-    fi
-    set -e
+    # set +e
+    # python3 $CHECK_EXIST_SCRIPT "$PKG_NAME==$version"
+    # if [ $? -eq 0 ]; then
+    #     echo "已有 wheel $PKG_NAME==$version"
+    #     continue
+    # else
+    #     echo "需要构建"
+    # fi
+    # set -e
 
     ## 这个环境变量决定 whl 包名里面的版本
     export PYTORCH_BUILD_VERSION=$version
@@ -158,7 +189,15 @@ for version in "${TO_BUILD_VERSIONS[@]}"; do
         exit 1
     fi
 
-    cd "$SOURCE_TARGET_DIR" || { echo "❌ ERROR: 无法进入目录 $SOURCE_TARGET_DIR"; exit 1; }
+    if [[ -d "$BUILD_SOURCE_DIR" ]]; then
+        echo "🧹 清理旧的构建副本目录: $BUILD_SOURCE_DIR"
+        rm -rf "$BUILD_SOURCE_DIR" || { echo "❌ ERROR: 无法删除构建副本目录 $BUILD_SOURCE_DIR"; exit 1; }
+    fi
+
+    echo "📋 复制源码到独立构建目录: $BUILD_SOURCE_DIR"
+    cp -a "$SOURCE_TARGET_DIR" "$BUILD_SOURCE_DIR" || { echo "❌ ERROR: 复制源码到构建目录失败"; exit 1; }
+
+    cd "$BUILD_SOURCE_DIR" || { echo "❌ ERROR: 无法进入目录 $BUILD_SOURCE_DIR"; exit 1; }
 
     ## 清理旧的 build 目录
     if [[ -d build ]]; then
@@ -198,10 +237,10 @@ for version in "${TO_BUILD_VERSIONS[@]}"; do
     source "$VENV_DIR/bin/activate"
 
     ## 存在，则进入该目录
-    if [ -d "$SOURCE_TARGET_DIR" ]; then
-        cd "$SOURCE_TARGET_DIR"
+    if [ -d "$BUILD_SOURCE_DIR" ]; then
+        cd "$BUILD_SOURCE_DIR"
     else
-        echo "Error no torch project dir !"
+        echo "Error no torch build project dir !"
         exit 1
     fi
 
@@ -218,9 +257,9 @@ for version in "${TO_BUILD_VERSIONS[@]}"; do
     ## 执行上传流程
     echo "📦 上传构建的 wheel"
     if [ -f "$UPLOAD_SCRIPT" ]; then
-        echo "🚀 Running upload_built_wheels.py for $PACKAGE_NAME"
+        echo "🚀 Running upload_built_wheels.py for $PKG_NAME"
         if ! python "$UPLOAD_SCRIPT"; then
-            echo "⚠️ Failed to run upload_built_wheels.py for $PACKAGE_NAME"
+            echo "⚠️ Failed to run upload_built_wheels.py for $PKG_NAME"
         fi
     else
         echo "⚠️ upload_built_wheels.py not found in $SCRIPT_DIR"
@@ -236,6 +275,7 @@ for version in "${TO_BUILD_VERSIONS[@]}"; do
     rm -rf "$BUILD_TMPDIR" || echo "❌ Failed to remove $BUILD_TMPDIR"
     rm -rf "$VENV_DIR" || echo "⚠️ Failed Remove $VENV_DIR"
     rm -rf "$WHEEL_CACHE_DIR" || echo "⚠️ Failed Remove $WHEEL_CACHE_DIR"
+    rm -rf "$BUILD_SOURCE_DIR" || echo "⚠️ Failed Remove $BUILD_SOURCE_DIR"
 
 done
 
