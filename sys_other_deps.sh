@@ -109,6 +109,9 @@ case "$GLIBC_VERSION" in
     "2.42")
         EXT_PREFIX="bianbu26-pre"
         ;;
+    "2.43")
+        EXT_PREFIX="bianbu26"
+        ;;
     *)
         echo "❌ 不支持的 glibc 版本: $GLIBC_VERSION"
         exit 1

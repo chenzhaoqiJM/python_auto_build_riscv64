@@ -27,7 +27,7 @@ export CMAKE_POLICY_VERSION_MINIMUM=3.5
 # export CMAKE_ARGS="-DCMAKE_CXX_FLAGS=-march=rv64gcv -DCMAKE_C_FLAGS=-march=rv64gcv -Wno-error \
 # -DWITH_GTK=OFF -DWITH_QT=ON -DWITH_GTK_2_X=OFF"
 
-export CI_BUILD=1 
+export CI_BUILD=1
 
 export MAKEFLAGS="-j$(nproc)"
 export NINJAFLAGS="-j$(nproc)"
@@ -41,17 +41,4 @@ export LD_LIBRARY_PATH=/opt/lib:$LD_LIBRARY_PATH
 
 export UV_INDEX_URL=https://mirrors.aliyun.com/pypi/simple
 export UV_EXTRA_INDEX_URL=https://git.spacemit.com/api/v4/projects/33/packages/pypi/simple
-# for C++ QT -----------------------------------------------------------------------------
-# 添加 Qt lib 路径到 LD_LIBRARY_PATH（防重复）
-# if [[ ":$LD_LIBRARY_PATH:" != *":/opt/Qt5.15.16/lib:"* ]]; then
-#     export LD_LIBRARY_PATH=/opt/Qt5.15.16/lib:$LD_LIBRARY_PATH
-# fi
-
-# # 添加 Qt bin 路径到 PATH（防重复）
-# if [[ ":$PATH:" != *":/opt/Qt5.15.16/bin:"* ]]; then
-#     export PATH=/opt/Qt5.15.16/bin:$PATH
-# fi
-
-# 设置 QTDIR 变量
-# export QTDIR=/opt/Qt5.15.16
 
