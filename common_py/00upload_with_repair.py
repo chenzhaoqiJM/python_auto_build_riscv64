@@ -139,12 +139,28 @@ def try_auditwheel_repair(whl_path: Path) -> Path:
         print(f"📋 Copied original wheel to: {fallback_path}")
         return fallback_path
 
+def is_gitlab_project_81_pypirc() -> bool:
+    pypirc_path = Path(os.path.expanduser("~/.pypirc"))
+    if not pypirc_path.is_file():
+        return False
+
+    try:
+        content = pypirc_path.read_text()
+    except Exception as e:
+        print(f"⚠️  Failed to read {pypirc_path}: {e}")
+        return False
+
+    return (
+        "[gitlab]" in content
+        and "git.spacemit.com/api/v4/projects/81/packages/pypi" in content
+    )
+
 def upload_whl(whl_path: Path):
     if 'none-any' in str(whl_path.name):
         print("none-any 包，不上传")
         return
-    if ('abi3' in whl_path.name or 'none' in whl_path.name) and sys.version_info > (3, 12):
-        print(f"检测到 abi3 包且当前 Python 版本为 {sys.version_info.major}.{sys.version_info.minor}，跳过上传: {whl_path.name}")
+    if (not is_gitlab_project_81_pypirc()) and ('abi3' in whl_path.name or 'none' in whl_path.name) and sys.version_info > (3, 12):
+        print(f"检测到 abi3 包 或 none 包，且当前 Python 版本为 {sys.version_info.major}.{sys.version_info.minor}，跳过上传: {whl_path.name}")
         return
     print(f"🚀 Uploading {whl_path.name} to PyPI repo: {PYPI_REPO}")
     subprocess.run([
