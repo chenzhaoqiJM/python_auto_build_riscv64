@@ -18,8 +18,11 @@ echo "开始构建 Python $BUILD_FOR_VERSION ..."
 
 # 可配置字段
 export PIP_CACHE_DIR="$HOME/.cache/pip/wheels_hp_uv_$BUILD_FOR_VERSION"
+export UV_CACHE_DIR="$HOME/.cache/uv_hp_$BUILD_FOR_VERSION"
+export XDG_CACHE_HOME="$HOME/.cache_hp_uv_$BUILD_FOR_VERSION"
 export WHEELS_REPAIR_DIR="$HOME/.mywheel_repair/hp_uv_$BUILD_FOR_VERSION"
 BUILD_TMPDIR="$HOME/.mytmp/hp_uv_$BUILD_FOR_VERSION"
+PIP_BUILD_TRACKER_DIR="$BUILD_TMPDIR/pip-build-tracker"
 VENV_NAME="hp_uv_$BUILD_FOR_VERSION"
 VENV_DIR="$HOME/pyenvs/$VENV_NAME"
 DIST_DIR="$HOME/pyenvs/store"
@@ -42,10 +45,11 @@ if ! command -v timeout >/dev/null 2>&1; then
 fi
 
 # 创建必要目录
-mkdir -p "$BUILD_TMPDIR" "$WHEEL_CACHE_DIR" "$DIST_DIR"
+mkdir -p "$BUILD_TMPDIR" "$PIP_BUILD_TRACKER_DIR" "$WHEEL_CACHE_DIR" "$DIST_DIR" "$UV_CACHE_DIR" "$XDG_CACHE_HOME"
 
 # 编译相关参数
 export TMPDIR="$BUILD_TMPDIR"
+export PIP_BUILD_TRACKER="$PIP_BUILD_TRACKER_DIR"
 export PYTHONPATH="$VENV_DIR/lib/python$BUILD_FOR_VERSION/site-packages"
 echo "&&&- set PYTHONPATH to: $PYTHONPATH"
 
@@ -257,7 +261,10 @@ while true; do
 
     # 更新第三方库
     echo "🔄 Updating third-party libraries..."
-    bash "$UPDATE_LIBS_SH" || echo "⚠️ Failed to update libs"
+    (
+        flock 200
+        bash "$UPDATE_LIBS_SH"
+    ) 200>"$HOME/.python_auto_build_update_libs.lock" || echo "⚠️ Failed to update libs"
 
     echo "🕒 Sleeping for 2 hours..."
     sleep 7200

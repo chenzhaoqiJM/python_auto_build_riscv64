@@ -159,7 +159,7 @@ def upload_whl(whl_path: Path):
     if 'none-any' in str(whl_path.name):
         print("none-any 包，不上传")
         return
-    if (not is_gitlab_project_81_pypirc()) and ('abi3' in whl_path.name or 'none' in whl_path.name) and sys.version_info > (3, 12):
+    if (not is_gitlab_project_81_pypirc()) and ('abi3' in whl_path.name or 'none' in whl_path.name) and sys.version_info[:2] > (3, 12):
         print(f"检测到 abi3 包 或 none 包，且当前 Python 版本为 {sys.version_info.major}.{sys.version_info.minor}，跳过上传: {whl_path.name}")
         return
     print(f"🚀 Uploading {whl_path.name} to PyPI repo: {PYPI_REPO}")

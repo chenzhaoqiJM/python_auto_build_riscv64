@@ -14,7 +14,8 @@ from registry import register
 def get_git_repo_dir() -> Path:
     """获取 faiss-wheels git 仓库存储目录"""
     home = Path.home()
-    return home / ".pip_git" / "faiss-wheels"
+    build_for_version = os.environ.get("BUILD_FOR_VERSION", "default")
+    return home / f".pip_git_hp_{build_for_version}" / "faiss-wheels"
 
 
 def clone_or_update_repo(git_dir: Path):

@@ -13,7 +13,8 @@ from registry import register
 def get_git_repo_dir():
     """获取 git 仓库存储目录"""
     home = Path.home()
-    git_dir = home / ".pip_git" / "cmeel-assimp"
+    build_for_version = os.environ.get("BUILD_FOR_VERSION", "default")
+    git_dir = home / f".pip_git_hp_{build_for_version}" / "cmeel-assimp"
     return git_dir
 
 def clone_or_update_repo(git_dir: Path):

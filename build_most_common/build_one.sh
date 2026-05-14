@@ -28,17 +28,21 @@ SKIP_LIST="$SCRIPT_DIR/../common_py/skip_pkgs.txt"
 
 # 可配置字段
 export PIP_CACHE_DIR="$HOME/.cache/pip/build_one_uv_$BUILD_FOR_VERSION"
+export UV_CACHE_DIR="$HOME/.cache/uv_build_one_$BUILD_FOR_VERSION"
+export XDG_CACHE_HOME="$HOME/.cache_build_one_uv_$BUILD_FOR_VERSION"
 export WHEELS_REPAIR_DIR="$HOME/.mywheel_repair/build_one_uv_$BUILD_FOR_VERSION"
 BUILD_TMPDIR="$HOME/.mytmp/build_one_uv_$BUILD_FOR_VERSION"
+PIP_BUILD_TRACKER_DIR="$BUILD_TMPDIR/pip-build-tracker"
 VENV_NAME="build_one_uv_$BUILD_FOR_VERSION"
 VENV_DIR="$HOME/pyenvs/$VENV_NAME"
 DIST_DIR="$HOME/pyenvs/store"
 WHEEL_CACHE_DIR="$HOME/.mywheels/build_one_uv_$BUILD_FOR_VERSION"
 
-mkdir -p "$BUILD_TMPDIR" "$WHEEL_CACHE_DIR" "$DIST_DIR"
+mkdir -p "$BUILD_TMPDIR" "$PIP_BUILD_TRACKER_DIR" "$WHEEL_CACHE_DIR" "$DIST_DIR" "$UV_CACHE_DIR" "$XDG_CACHE_HOME"
 
 # 环境变量
 export TMPDIR="$BUILD_TMPDIR"
+export PIP_BUILD_TRACKER="$PIP_BUILD_TRACKER_DIR"
 export PYTHONPATH="$VENV_DIR/lib/python$BUILD_FOR_VERSION/site-packages"
 
 echo "&&&- set PYTHONPATH to: $PYTHONPATH"

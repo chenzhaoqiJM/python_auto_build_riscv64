@@ -27,16 +27,20 @@ NO_DEPS_SCRIPT="$SCRIPT_DIR/../common_py/check_no_deps.py"
 
 # 可配置字段
 export PIP_CACHE_DIR="$HOME/.cache/pip/wheels_version_single_uv_$BUILD_FOR_VERSION"
+export UV_CACHE_DIR="$HOME/.cache/uv_version_single_$BUILD_FOR_VERSION"
+export XDG_CACHE_HOME="$HOME/.cache_version_single_uv_$BUILD_FOR_VERSION"
 export WHEELS_REPAIR_DIR="$HOME/.mywheel_repair/version_single_uv_$BUILD_FOR_VERSION"
 BUILD_TMPDIR="$HOME/.mytmp/version_single_uv_$BUILD_FOR_VERSION"
+PIP_BUILD_TRACKER_DIR="$BUILD_TMPDIR/pip-build-tracker"
 VENV_NAME="version_single_uv_$BUILD_FOR_VERSION"
 VENV_DIR="$HOME/pyenvs/$VENV_NAME"
 DIST_DIR="$HOME/pyenvs/store"
 WHEEL_CACHE_DIR="$HOME/.mywheels/version_single_uv_$BUILD_FOR_VERSION"
 
-mkdir -p "$BUILD_TMPDIR" "$WHEEL_CACHE_DIR" "$DIST_DIR"
+mkdir -p "$BUILD_TMPDIR" "$PIP_BUILD_TRACKER_DIR" "$WHEEL_CACHE_DIR" "$DIST_DIR" "$UV_CACHE_DIR" "$XDG_CACHE_HOME"
 
 export TMPDIR="$BUILD_TMPDIR"
+export PIP_BUILD_TRACKER="$PIP_BUILD_TRACKER_DIR"
 export PYTHONPATH="$VENV_DIR/lib/python$BUILD_FOR_VERSION/site-packages"
 echo "&&&- set PYTHONPATH to: $PYTHONPATH"
 

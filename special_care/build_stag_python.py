@@ -36,7 +36,7 @@ def _get_tag(package_spec: str):
 def build_stag_python_func(package_spec, wheel_dir):
     build_for_version = _ensure_env("BUILD_FOR_VERSION")
 
-    target_root = Path.home() / "ck"
+    target_root = Path.home() / f"ck_hp_{build_for_version}"
     target_dir = target_root / "stag-python"
     wheel_dir_path = Path(wheel_dir)
     wheel_dir_path.mkdir(parents=True, exist_ok=True)
