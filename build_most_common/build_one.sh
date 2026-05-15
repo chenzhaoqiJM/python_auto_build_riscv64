@@ -37,8 +37,30 @@ VENV_NAME="build_one_uv_$BUILD_FOR_VERSION"
 VENV_DIR="$HOME/pyenvs/$VENV_NAME"
 DIST_DIR="$HOME/pyenvs/store"
 WHEEL_CACHE_DIR="$HOME/.mywheels/build_one_uv_$BUILD_FOR_VERSION"
+UPLOAD_TIMEOUT_SECONDS=${UPLOAD_TIMEOUT_SECONDS:-3600}
 
 mkdir -p "$BUILD_TMPDIR" "$PIP_BUILD_TRACKER_DIR" "$WHEEL_CACHE_DIR" "$DIST_DIR" "$UV_CACHE_DIR" "$XDG_CACHE_HOME"
+
+if ! command -v timeout >/dev/null 2>&1; then
+    echo "❌ 'timeout' command not found. Please install coreutils."
+    exit 1
+fi
+
+run_upload_script() {
+    local package_name="$1"
+
+    if [ -f "$UPLOAD_SCRIPT" ]; then
+        echo "🚀 Running upload script for $package_name"
+        if ! timeout --foreground --kill-after=60s "${UPLOAD_TIMEOUT_SECONDS}s" python "$UPLOAD_SCRIPT"; then
+            echo "⚠️ Upload script failed or timed out after ${UPLOAD_TIMEOUT_SECONDS}s for $package_name"
+            echo "$package_name" >> "$SCRIPT_DIR/failed_test.log"
+            return 1
+        fi
+    else
+        echo "⚠️  Upload script not found: $UPLOAD_SCRIPT"
+        return 1
+    fi
+}
 
 # 环境变量
 export TMPDIR="$BUILD_TMPDIR"
@@ -211,14 +233,7 @@ for PACKAGE_NAME in "$@"; do
     # func select ---------------------------------------------
 
     echo "📦 上传构建的 wheel"
-    if [ -f "$UPLOAD_SCRIPT" ]; then
-        echo "🚀 Running upload_built_wheels.py for $PACKAGE_NAME"
-        if ! python "$UPLOAD_SCRIPT"; then
-            echo "⚠️ Failed to run upload_built_wheels.py for $PACKAGE_NAME"
-        fi
-    else
-        echo "⚠️ upload_built_wheels.py not found in $SCRIPT_DIR"
-    fi
+    run_upload_script "$PACKAGE_NAME" || true
 
     # 清除环境
     deactivate || true

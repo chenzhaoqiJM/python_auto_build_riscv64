@@ -25,6 +25,7 @@ WHEELS_REPAIR_DIR = Path(os.path.expanduser(WHEELS_REPAIR_DIR))
 
 RECORD_FILE = Path(os.path.expanduser("~/.upload_whl_log.txt"))
 PYPI_REPO = "gitlab"
+UPLOAD_TIMEOUT_SECONDS = int(os.getenv("UPLOAD_TIMEOUT_SECONDS", "1800"))
 
 # 保证目录存在
 PIP_CACHE_DIR.mkdir(parents=True, exist_ok=True)
@@ -163,9 +164,11 @@ def upload_whl(whl_path: Path):
         print(f"检测到 abi3 包 或 none 包，且当前 Python 版本为 {sys.version_info.major}.{sys.version_info.minor}，跳过上传: {whl_path.name}")
         return
     print(f"🚀 Uploading {whl_path.name} to PyPI repo: {PYPI_REPO}")
+    env = os.environ.copy()
+    env.setdefault("TWINE_NON_INTERACTIVE", "1")
     subprocess.run([
         "twine", "upload", "-r", PYPI_REPO, str(whl_path)
-    ], check=True)
+    ], check=True, timeout=UPLOAD_TIMEOUT_SECONDS, env=env)
     with open(RECORD_FILE, "a") as f:
         f.write(f"{datetime.now()} {whl_path.name}\n")
 
@@ -198,6 +201,8 @@ def main():
 
             upload_whl(Path(final_whl3))
             # shutil.copy2(final_whl3, '/home/zqpi/')
+        except subprocess.TimeoutExpired:
+            print(f"⏰ Upload timed out after {UPLOAD_TIMEOUT_SECONDS}s for {whl.name}")
         except subprocess.CalledProcessError:
             print(f"⚠️  Upload failed for {whl.name}")
         except Exception as e:

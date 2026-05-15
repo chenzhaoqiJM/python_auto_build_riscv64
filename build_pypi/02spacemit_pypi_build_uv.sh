@@ -22,6 +22,8 @@ export UV_CACHE_DIR="$HOME/.cache/uv_auto_spacemit_$BUILD_FOR_VERSION"
 export XDG_CACHE_HOME="$HOME/.cache_auto_spacemit_uv_$BUILD_FOR_VERSION"
 export WHEELS_REPAIR_DIR="$HOME/.mywheel_repair/auto_spacemit_uv_$BUILD_FOR_VERSION"
 BUILD_TMPDIR="$HOME/.mytmp/auto_spacemit_uv_$BUILD_FOR_VERSION"
+export CARGO_HOME="$BUILD_TMPDIR/cargo-home"
+export RUSTUP_HOME="$BUILD_TMPDIR/rustup-home"
 PIP_BUILD_TRACKER_DIR="$BUILD_TMPDIR/pip-build-tracker"
 VENV_NAME="tmpbuild_auto_spacemit_uv_$BUILD_FOR_VERSION"
 VENV_DIR="$HOME/pyenvs/$VENV_NAME"
@@ -40,20 +42,38 @@ UPDATE_LIBS_SH="$SCRIPT_DIR/../update_libs.sh"
 
 # 单包构建超时（默认24小时）
 BUILD_TIMEOUT_SECONDS=$((24 * 60 * 60))
+UPLOAD_TIMEOUT_SECONDS=${UPLOAD_TIMEOUT_SECONDS:-3600}
 
 if ! command -v timeout >/dev/null 2>&1; then
     echo "❌ 'timeout' command not found. Please install coreutils."
     exit 1
 fi
 
+run_upload_script() {
+    local package_name="$1"
+
+    if [ -f "$UPLOAD_SCRIPT" ]; then
+        echo "🚀 Running upload script for $package_name"
+        if ! timeout --foreground --kill-after=60s "${UPLOAD_TIMEOUT_SECONDS}s" python "$UPLOAD_SCRIPT"; then
+            echo "⚠️ Upload script failed or timed out after ${UPLOAD_TIMEOUT_SECONDS}s for $package_name"
+            echo "$package_name" >> "$FAILED_LIST"
+            return 1
+        fi
+    else
+        echo "⚠️  Upload script not found: $UPLOAD_SCRIPT"
+        return 1
+    fi
+}
+
 
 # 创建必要目录
-mkdir -p "$BUILD_TMPDIR" "$PIP_BUILD_TRACKER_DIR" "$WHEEL_CACHE_DIR" "$DIST_DIR" "$UV_CACHE_DIR" "$XDG_CACHE_HOME"
+mkdir -p "$BUILD_TMPDIR" "$PIP_BUILD_TRACKER_DIR" "$WHEEL_CACHE_DIR" "$DIST_DIR" "$UV_CACHE_DIR" "$XDG_CACHE_HOME" "$CARGO_HOME" "$RUSTUP_HOME"
 
 export TMPDIR="$BUILD_TMPDIR"
 export PIP_BUILD_TRACKER="$PIP_BUILD_TRACKER_DIR"
 export PYTHONPATH="$VENV_DIR/lib/python$BUILD_FOR_VERSION/site-packages"
 echo "&&&- set PYTHONPATH to: $PYTHONPATH"
+echo "&&&- set CARGO_HOME to: $CARGO_HOME"
 
 # 动态环境变量
 ENV_LOADER_SH="$SCRIPT_DIR/../dynamic_env/env_loader.sh"
@@ -169,6 +189,7 @@ while true; do
         command -v deactivate &>/dev/null && deactivate || true
         rm -rf "$VENV_DIR" || echo "❌ Failed to remove venv"
         rm -rf "$BUILD_TMPDIR"/* || echo "❌ Failed to remove build tmp"
+        mkdir -p "$PIP_BUILD_TRACKER_DIR" "$CARGO_HOME" "$RUSTUP_HOME"
         rm -rf "$WHEEL_CACHE_DIR"/* || echo "❌ Failed to clean wheel cache"
 
         echo "📂 Copying venv..."
@@ -211,6 +232,10 @@ while true; do
 
             NO_DEPS=$(python3 "$NO_DEPS_SCRIPT" "$PACKAGE_NAME")
             echo "⚙️  Extra pip flags: $NO_DEPS"
+
+            # Rust/PyO3 packages may block forever on Cargo's global package-cache
+            # lock when multiple builders share ~/.cargo. Keep Cargo local here.
+            find "$CARGO_HOME" -type f \( -name '.package-cache' -o -name '*.lock' \) -delete 2>/dev/null || true
 
             timeout --foreground --kill-after=60s "${BUILD_TIMEOUT_SECONDS}s" \
                 pip wheel --verbose $NO_DEPS --wheel-dir="$WHEEL_CACHE_DIR" "$PACKAGE_NAME"
@@ -262,12 +287,7 @@ while true; do
         # func select ---------------------------------------------
 
         # 调用上传脚本（如果存在）
-        if [ -f "$UPLOAD_SCRIPT" ]; then
-            echo "🚀 Running upload script for $PACKAGE_NAME"
-            python "$UPLOAD_SCRIPT"
-        else
-            echo "⚠️  Upload script not found: $UPLOAD_SCRIPT"
-        fi
+        run_upload_script "$PACKAGE_NAME" || true
 
         deactivate || true
         sleep 2
