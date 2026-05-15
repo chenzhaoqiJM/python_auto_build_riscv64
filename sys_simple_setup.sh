@@ -77,6 +77,8 @@ elif grep -q "model name.*Spacemit(R) X100\|model name.*Spacemit(R) A100" <<< "$
     CPU_VARIANT="K3"
     EXTRA_INDEX_URL="https://git.spacemit.com/api/v4/projects/81/packages/pypi/simple"
     SOURCE_FILE="$SCRIPT_DIR/pypirc_k3.txt"
+    echo "📋 K3 detected, overwriting $SCRIPT_DIR/pypirc.txt with $SOURCE_FILE"
+    cp "$SOURCE_FILE" "$SCRIPT_DIR/pypirc.txt"
 else
     echo "❌ 无法识别 CPU 型号，默认使用 K1 PyPI 源配置, 请确保你使用的是 Bianbu2.2/Bianbu2.3/Bianbu3.0 版本的镜像"
     CPU_VARIANT="X86"
