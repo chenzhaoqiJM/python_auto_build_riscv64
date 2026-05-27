@@ -116,6 +116,7 @@ else
             echo "Removing tmp..........."
             rm -rf "$VENV_DIR" || echo "❌ Failed to remove venv"
             rm -rf "$BUILD_TMPDIR"/* || echo "❌ Failed to remove build tmp"
+            mkdir -p "$BUILD_TMPDIR" "$PIP_BUILD_TRACKER_DIR" "$WHEEL_CACHE_DIR" "$DIST_DIR" "$UV_CACHE_DIR" "$XDG_CACHE_HOME" "$CARGO_HOME" "$RUSTUP_HOME"
             exit 1
         fi
     done
@@ -136,6 +137,7 @@ else
     echo "Removing tmp..........."
     rm -rf "$VENV_DIR" || echo "❌ Failed to remove venv"
     rm -rf "$BUILD_TMPDIR"/* || echo "❌ Failed to remove build tmp"
+    mkdir -p "$BUILD_TMPDIR" "$PIP_BUILD_TRACKER_DIR" "$WHEEL_CACHE_DIR" "$DIST_DIR" "$UV_CACHE_DIR" "$XDG_CACHE_HOME" "$CARGO_HOME" "$RUSTUP_HOME"
 fi
 
 # 无限循环处理包
@@ -163,7 +165,7 @@ while true; do
         command -v deactivate &>/dev/null && deactivate || true
         rm -rf "$VENV_DIR" || echo "❌ Failed to remove venv"
         rm -rf "$BUILD_TMPDIR"/* || echo "❌ Failed to remove build tmp"
-        mkdir -p "$PIP_BUILD_TRACKER_DIR" "$CARGO_HOME" "$RUSTUP_HOME"
+        mkdir -p "$BUILD_TMPDIR" "$PIP_BUILD_TRACKER_DIR" "$WHEEL_CACHE_DIR" "$DIST_DIR" "$UV_CACHE_DIR" "$XDG_CACHE_HOME" "$CARGO_HOME" "$RUSTUP_HOME"
         rm -rf "$WHEEL_CACHE_DIR"/* || echo "❌ Failed to clean wheel cache"
 
         echo "📂 Copying venv..."
