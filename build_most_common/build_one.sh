@@ -121,6 +121,7 @@ else
             echo "Removing tmp..........."
             rm -rf "$VENV_DIR" || echo "❌ Failed to remove venv"
             rm -rf "$BUILD_TMPDIR"/* || echo "❌ Failed to remove build tmp"
+            mkdir -p "$BUILD_TMPDIR" "$PIP_BUILD_TRACKER_DIR" "$WHEEL_CACHE_DIR" "$DIST_DIR" "$UV_CACHE_DIR" "$XDG_CACHE_HOME"
             exit 1
         fi
     done
@@ -142,6 +143,7 @@ else
     rm -rf "$VENV_DIR" || echo "❌ Failed to remove venv"
     rm -rf "$BUILD_TMPDIR"/* || echo "❌ Failed to remove build tmp"
     rm -rf "$WHEEL_CACHE_DIR"/* || echo "❌ Failed to clean wheel cache"
+    mkdir -p "$BUILD_TMPDIR" "$PIP_BUILD_TRACKER_DIR" "$WHEEL_CACHE_DIR" "$DIST_DIR" "$UV_CACHE_DIR" "$XDG_CACHE_HOME"
 fi
 
 # 遍历每个传入的包名
@@ -158,6 +160,8 @@ for PACKAGE_NAME in "$@"; do
     rm -rf "$VENV_DIR" || echo "❌ Failed to remove venv"
     rm -rf "$BUILD_TMPDIR"/* || echo "❌ Failed to remove build tmp"
     rm -rf "$WHEEL_CACHE_DIR"/* || echo "❌ Failed to clean wheel cache"
+    mkdir -p "$BUILD_TMPDIR" "$PIP_BUILD_TRACKER_DIR" "$WHEEL_CACHE_DIR" "$DIST_DIR" "$UV_CACHE_DIR" "$XDG_CACHE_HOME"
+
 
     # 拷贝虚拟环境
     cp -r "$DIST_DIR/$VENV_NAME" "$VENV_DIR"
@@ -242,6 +246,7 @@ for PACKAGE_NAME in "$@"; do
     rm -rf "$VENV_DIR" || echo "❌ Failed to remove venv"
     rm -rf "$BUILD_TMPDIR"/* || echo "❌ Failed to remove build tmp"
     rm -rf "$WHEEL_CACHE_DIR"/* || echo "❌ Failed to clean wheel cache"
+    mkdir -p "$BUILD_TMPDIR" "$PIP_BUILD_TRACKER_DIR" "$WHEEL_CACHE_DIR" "$DIST_DIR" "$UV_CACHE_DIR" "$XDG_CACHE_HOME"
 
     echo "✅ Done: $PACKAGE_NAME"
     unload_env
