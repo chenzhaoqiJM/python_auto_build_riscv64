@@ -46,29 +46,8 @@ case "$GLIBC_VERSION" in
         ;;
 esac
 
-
-GCC_MAJOR=$(gcc -dumpfullversion | cut -d. -f1)
-
-if [ "$GCC_MAJOR" -lt 14 ]; then
-    echo "当前 GCC 版本为 $GCC_MAJOR，小于 14，开始安装 gcc-14 和 g++-14..."
-
-    sudo apt install -y gcc-14 g++-14
-
-    # 设置 update-alternatives
-    sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-14 100
-    sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-14 100
-    sudo update-alternatives --set gcc /usr/bin/gcc-14
-    sudo update-alternatives --set g++ /usr/bin/g++-14
-
-    sudo update-alternatives --install /usr/bin/riscv64-linux-gnu-gcc riscv64-linux-gnu-gcc /usr/bin/riscv64-linux-gnu-gcc-14 100
-    sudo update-alternatives --install /usr/bin/riscv64-linux-gnu-g++ riscv64-linux-gnu-g++ /usr/bin/riscv64-linux-gnu-g++-14 100
-    sudo update-alternatives --set riscv64-linux-gnu-gcc /usr/bin/riscv64-linux-gnu-gcc-14
-    sudo update-alternatives --set riscv64-linux-gnu-g++ /usr/bin/riscv64-linux-gnu-g++-14
-
-    echo "✅ GCC/G++ 已切换为 14"
-else
-    echo "✅ 当前 GCC 版本为 $GCC_MAJOR，已满足 ≥ 14，无需切换"
-fi
+source "$SCRIPT_DIR/common_compiler_setup.sh"
+ensure_gcc_14
 
 sleep 1
 

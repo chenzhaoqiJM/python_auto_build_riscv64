@@ -120,7 +120,7 @@ if [[ "$1" == "activate" ]]; then
     if version_le "$opencv_version" "4.10.0.84"; then
         export CMAKE_ARGS="-Wno-error -DWITH_GTK=OFF -DWITH_QT=ON -DWITH_GTK_2_X=OFF -DPYTHON3_LIMITED_API=${PYTHON_LIMITED_API}"
     else
-        export CMAKE_ARGS="-DCMAKE_CXX_FLAGS=-march=rv64gcv -DCMAKE_C_FLAGS=-march=rv64gcv -Wno-error -DWITH_GTK=OFF -DWITH_QT=ON -DWITH_GTK_2_X=OFF -DPYTHON3_LIMITED_API=${PYTHON_LIMITED_API}"
+        export CMAKE_ARGS="-DCMAKE_CXX_FLAGS=-march=rv64gcv_zvl256b -DCMAKE_C_FLAGS=-march=rv64gcv_zvl256b -Wno-error -DWITH_GTK=OFF -DWITH_QT=ON -DWITH_GTK_2_X=OFF -DPYTHON3_LIMITED_API=${PYTHON_LIMITED_API}"
     fi
 
     export QTDIR=$_opencv_INSTALL_PREFIX
