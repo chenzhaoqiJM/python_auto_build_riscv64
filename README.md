@@ -39,6 +39,12 @@ python3.12的包建议先在bianbu 2.x上构建，以避免glibc兼容性问题�
 
 ### 初始化
 
+sudo 免密
+
+```
+echo "$USER ALL=(ALL) NOPASSWD:ALL" | sudo tee /etc/sudoers.d/nopasswd_$USER
+```
+
 执行系统环境初始化脚本：
 
 ```bash
