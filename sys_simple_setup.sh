@@ -67,6 +67,8 @@ fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+bash "$SCRIPT_DIR/test_scripts/get_pypic.sh"
+
 CPUINFO_CONTENT="$(cat /proc/cpuinfo)"
 
 if grep -q "model name.*Spacemit(R) X60" <<< "$CPUINFO_CONTENT"; then

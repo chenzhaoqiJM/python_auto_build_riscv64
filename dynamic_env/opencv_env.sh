@@ -67,7 +67,7 @@ if [[ "$1" == "activate" ]]; then
     elif version_le "$opencv_version" "4.12.0.88"; then
         _opencv_INSTALL_PREFIX=/opt/Qt5.15.16
     else
-        _opencv_INSTALL_PREFIX=/opt/Qt5.15.16  # 默认路径
+        _opencv_INSTALL_PREFIX=/opt/Qt5.15.18  # 默认路径
     fi
     echo "[opencvEnv] opencv version: $opencv_version, using Qt path: $_opencv_INSTALL_PREFIX"
 
