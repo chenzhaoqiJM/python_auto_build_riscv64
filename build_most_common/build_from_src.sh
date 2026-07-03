@@ -153,6 +153,7 @@ for PACKAGE_SOURCE_PATH in "$@"; do
 
     # 拷贝源码
     BASENAME_1="$(basename "$PACKAGE_SOURCE_PATH")"
+    PACKAGE_NAME_REAL_CURRENT="${PACKAGE_NAME_REAL:-$BASENAME_1}"
 
     TMP_SOURCE_DIR="$TMPDIR/$BASENAME_1"
     cp -ra "$PACKAGE_SOURCE_PATH" "$TMPDIR/"
@@ -162,7 +163,7 @@ for PACKAGE_SOURCE_PATH in "$@"; do
     source "$VENV_DIR/bin/activate"
 
     # 动态环境变量
-    source "$ENV_LOADER_SH" "$PACKAGE_NAME_REAL"
+    source "$ENV_LOADER_SH" "$PACKAGE_NAME_REAL_CURRENT"
     load_env
     echo "LD_LIBRARY_PATH=${LD_LIBRARY_PATH}"
 
