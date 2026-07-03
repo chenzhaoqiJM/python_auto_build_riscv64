@@ -23,7 +23,6 @@ export XDG_CACHE_HOME="$HOME/.cache_hp_uv_$BUILD_FOR_VERSION"
 export WHEELS_REPAIR_DIR="$HOME/.mywheel_repair/hp_uv_$BUILD_FOR_VERSION"
 BUILD_TMPDIR="$HOME/.mytmp/hp_uv_$BUILD_FOR_VERSION"
 export CARGO_HOME="$BUILD_TMPDIR/cargo-home"
-export RUSTUP_HOME="$BUILD_TMPDIR/rustup-home"
 PIP_BUILD_TRACKER_DIR="$BUILD_TMPDIR/pip-build-tracker"
 VENV_NAME="hp_uv_$BUILD_FOR_VERSION"
 VENV_DIR="$HOME/pyenvs/$VENV_NAME"
@@ -64,7 +63,7 @@ run_upload_script() {
 }
 
 # 创建必要目录
-mkdir -p "$BUILD_TMPDIR" "$PIP_BUILD_TRACKER_DIR" "$WHEEL_CACHE_DIR" "$DIST_DIR" "$UV_CACHE_DIR" "$XDG_CACHE_HOME" "$CARGO_HOME" "$RUSTUP_HOME"
+mkdir -p "$BUILD_TMPDIR" "$PIP_BUILD_TRACKER_DIR" "$WHEEL_CACHE_DIR" "$DIST_DIR" "$UV_CACHE_DIR" "$XDG_CACHE_HOME" "$CARGO_HOME"
 
 # 编译相关参数
 export TMPDIR="$BUILD_TMPDIR"
@@ -116,7 +115,7 @@ else
             echo "Removing tmp..........."
             rm -rf "$VENV_DIR" || echo "❌ Failed to remove venv"
             rm -rf "$BUILD_TMPDIR"/* || echo "❌ Failed to remove build tmp"
-            mkdir -p "$BUILD_TMPDIR" "$PIP_BUILD_TRACKER_DIR" "$WHEEL_CACHE_DIR" "$DIST_DIR" "$UV_CACHE_DIR" "$XDG_CACHE_HOME" "$CARGO_HOME" "$RUSTUP_HOME"
+            mkdir -p "$BUILD_TMPDIR" "$PIP_BUILD_TRACKER_DIR" "$WHEEL_CACHE_DIR" "$DIST_DIR" "$UV_CACHE_DIR" "$XDG_CACHE_HOME" "$CARGO_HOME"
             exit 1
         fi
     done
@@ -137,7 +136,7 @@ else
     echo "Removing tmp..........."
     rm -rf "$VENV_DIR" || echo "❌ Failed to remove venv"
     rm -rf "$BUILD_TMPDIR"/* || echo "❌ Failed to remove build tmp"
-    mkdir -p "$BUILD_TMPDIR" "$PIP_BUILD_TRACKER_DIR" "$WHEEL_CACHE_DIR" "$DIST_DIR" "$UV_CACHE_DIR" "$XDG_CACHE_HOME" "$CARGO_HOME" "$RUSTUP_HOME"
+    mkdir -p "$BUILD_TMPDIR" "$PIP_BUILD_TRACKER_DIR" "$WHEEL_CACHE_DIR" "$DIST_DIR" "$UV_CACHE_DIR" "$XDG_CACHE_HOME" "$CARGO_HOME"
 fi
 
 # 无限循环处理包
@@ -165,7 +164,7 @@ while true; do
         command -v deactivate &>/dev/null && deactivate || true
         rm -rf "$VENV_DIR" || echo "❌ Failed to remove venv"
         rm -rf "$BUILD_TMPDIR"/* || echo "❌ Failed to remove build tmp"
-        mkdir -p "$BUILD_TMPDIR" "$PIP_BUILD_TRACKER_DIR" "$WHEEL_CACHE_DIR" "$DIST_DIR" "$UV_CACHE_DIR" "$XDG_CACHE_HOME" "$CARGO_HOME" "$RUSTUP_HOME"
+        mkdir -p "$BUILD_TMPDIR" "$PIP_BUILD_TRACKER_DIR" "$WHEEL_CACHE_DIR" "$DIST_DIR" "$UV_CACHE_DIR" "$XDG_CACHE_HOME" "$CARGO_HOME"
         rm -rf "$WHEEL_CACHE_DIR"/* || echo "❌ Failed to clean wheel cache"
 
         echo "📂 Copying venv..."
