@@ -256,6 +256,7 @@ done
 if [ -s "$SCRIPT_DIR/failed_test.log" ]; then
     echo "❌ 以下包构建失败："
     cat "$SCRIPT_DIR/failed_test.log"
+    exit 1
 else
     echo "🎉 所有包均构建成功！"
 fi
