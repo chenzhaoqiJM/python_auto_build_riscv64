@@ -21,7 +21,9 @@ PKG_ENV_LOADER="$1"
 load_env() {
     echo "[INFO] Activating $PKG_ENV_LOADER"
     for script in "${MODULE_SCRIPTS[@]}"; do
-        source "$script" activate "$PKG_ENV_LOADER"
+        if ! source "$script" activate "$PKG_ENV_LOADER"; then
+            echo "⚠️ Failed to load env script: $script"
+        fi
     done
 }
 
@@ -29,6 +31,8 @@ load_env() {
 unload_env() {
     echo "[INFO] Deactivating"
     for (( i=${#MODULE_SCRIPTS[@]}-1; i>=0; i-- )); do
-        source "${MODULE_SCRIPTS[i]}" deactivate
+        if ! source "${MODULE_SCRIPTS[i]}" deactivate; then
+            echo "⚠️ Failed to unload env script: ${MODULE_SCRIPTS[i]}"
+        fi
     done
 }

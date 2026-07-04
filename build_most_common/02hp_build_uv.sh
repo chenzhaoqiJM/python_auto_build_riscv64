@@ -46,6 +46,14 @@ if ! command -v timeout >/dev/null 2>&1; then
     exit 1
 fi
 
+record_failed() {
+    local package_name="$1"
+
+    if ! echo "$package_name" >> "$FAILED_LIST"; then
+        echo "⚠️ Failed to write failed package to $FAILED_LIST: $package_name"
+    fi
+}
+
 run_upload_script() {
     local package_name="$1"
 
@@ -53,7 +61,7 @@ run_upload_script() {
         echo "🚀 Running upload script for $package_name"
         if ! timeout --foreground --kill-after=60s "${UPLOAD_TIMEOUT_SECONDS}s" python "$UPLOAD_SCRIPT"; then
             echo "⚠️ Upload script failed or timed out after ${UPLOAD_TIMEOUT_SECONDS}s for $package_name"
-            echo "$package_name" >> "$FAILED_LIST"
+            record_failed "$package_name"
             return 1
         fi
     else
@@ -142,7 +150,9 @@ fi
 # 无限循环处理包
 while true; do
     echo "⏳ Starting new round at $(date)"
-    > "$FAILED_LIST"
+    if ! : > "$FAILED_LIST"; then
+        echo "⚠️ Failed to clear failed list: $FAILED_LIST"
+    fi
 
     if [ ! -f "$PACKAGE_LIST" ]; then
         echo "❌ File not found: $PACKAGE_LIST"
@@ -194,12 +204,12 @@ while true; do
                 return 100
             elif [[ $exit_code -eq 124 ]]; then
                 echo "⏰ Timeout (>24h), skip package: $PACKAGE_NAME"
-                echo "$PACKAGE_NAME" >> "$FAILED_LIST"
+                record_failed "$PACKAGE_NAME"
                 deactivate || true
                 return 124
             else
                 echo "❌ Special builder failed: $PACKAGE_NAME"
-                echo "$PACKAGE_NAME" >> "$FAILED_LIST"
+                record_failed "$PACKAGE_NAME"
                 deactivate || true
                 return 1
             fi
@@ -220,12 +230,12 @@ while true; do
 
             if [[ $build_exit_code -eq 124 ]]; then
                 echo "⏰ Timeout (>24h), skip package: $PACKAGE_NAME"
-                echo "$PACKAGE_NAME" >> "$FAILED_LIST"
+                record_failed "$PACKAGE_NAME"
                 deactivate || true
                 return 124
             elif [[ $build_exit_code -ne 0 ]]; then
                 echo "❌ Failed: $PACKAGE_NAME"
-                echo "$PACKAGE_NAME" >> "$FAILED_LIST"
+                record_failed "$PACKAGE_NAME"
                 deactivate || true
                 return 1
             fi
@@ -275,7 +285,7 @@ while true; do
     echo "🎉 Round finished at $(date)"
     if [ -s "$FAILED_LIST" ]; then
         echo "❗ Some packages failed:"
-        cat "$FAILED_LIST"
+        cat "$FAILED_LIST" || echo "⚠️ Failed to read failed list: $FAILED_LIST"
     else
         echo "✅ All packages installed successfully!"
     fi
