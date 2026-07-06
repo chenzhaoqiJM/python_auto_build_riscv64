@@ -14,7 +14,7 @@ __pycache__/
 dist/
 build/
 *.spec
-
+pypirc*.txt
 # pipenv / poetry / venv
 .env
 .venv
