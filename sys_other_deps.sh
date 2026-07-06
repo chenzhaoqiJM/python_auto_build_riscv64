@@ -141,7 +141,7 @@ BASE_URL="https://archive.spacemit.com/ros2/prebuilt_libs/$EXT_PREFIX/opt/ext"
 set +e  # 临时关闭 set -e
 download_and_extract $BASE_URL/qt_xcb/Qt5.15.16.tar.gz /opt/Qt5.15.16
 download_and_extract $BASE_URL/qt_xcb/Qt5.15.18.tar.gz /opt/Qt5.15.18
-
+download_and_extract $BASE_URL/qt_xcb/Qt5.15.19.tar.gz /opt/Qt5.15.19
 ### download_targz_all URL路径 tar文件的前缀名 /opt/ext下的解压子文件夹名
 
 # arrow
