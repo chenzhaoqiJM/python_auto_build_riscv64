@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""x86 PC hermes controller。
+"""x86 PC hermes-api controller。
 
-职责：通过 SSH 读取远端失败请求，准备 hermes 修复上下文，执行可配置修复命令，
+职责：通过 SSH 读取远端失败请求，准备 hermes 修复上下文，通过 hermes-api 修复，
 根据结果标记 fixed/permanent_failed。
 """
 
@@ -187,19 +187,77 @@ def write_experience(path: Path, request: dict, status: str, repair_log: Path) -
     path.write_text(text, encoding="utf-8")
 
 
-def run_hermes_api_command(args: argparse.Namespace, prompt_path: Path, repair_log: Path) -> int:
+def make_experience_prompt(request: dict, status: str, local_log: Path, repair_log: Path, experience_path: Path) -> str:
+    package = request.get("package", "")
+    return f"""# Hermes RISC-V wheel 修复经验整理
+
+请阅读本次构建失败日志和 hermes 修复日志，输出可直接保存的 Markdown 修复经验。
+controller 会把你的回复写入 `{experience_path}`，所以只输出 Markdown 正文，不要代码围栏。
+
+## 上下文
+
+- package: {package}
+- python_version: {request.get('python_version', '')}
+- arch: {request.get('arch', 'riscv64')}
+- status: {status}
+- remote_repo_root: {request.get('repo_root', '')}
+- failed_build_log: {local_log}
+- repair_log: {repair_log}
+- experience_path: {experience_path}
+
+## 必须包含
+
+- 根因判断
+- 实际修改或尝试
+- 验证命令和结果
+- 可复用经验
+- 如果状态不是 fixed，写清楚卡点和后续建议
+"""
+
+
+def write_experience_from_hermes(
+    args: argparse.Namespace,
+    request: dict,
+    status: str,
+    local_log: Path,
+    repair_log: Path,
+    experience_path: Path,
+    prompt_path: Path,
+    draft_path: Path,
+) -> bool:
+    write_experience(experience_path, request, status, repair_log)
+    prompt_path.write_text(make_experience_prompt(request, status, local_log, repair_log, experience_path), encoding="utf-8")
+    exit_code = run_hermes_api_command(args, prompt_path, repair_log, output_path=draft_path)
+    if exit_code != 0 or not draft_path.exists():
+        return False
+
+    text = draft_path.read_text(encoding="utf-8").strip()
+    if not text:
+        return False
+    experience_path.parent.mkdir(parents=True, exist_ok=True)
+    experience_path.write_text(text + "\n", encoding="utf-8")
+    return True
+
+
+def run_hermes_api_command(args: argparse.Namespace, prompt_path: Path, repair_log: Path, *, output_path: Path | None = None) -> int:
     script = """from pathlib import Path
 from run_agent import AIAgent
 
 prompt = Path({prompt!r}).read_text(encoding="utf-8")
+output_path = {output!r}
 agent = AIAgent(
     model={model!r},
     quiet_mode=True,
     skip_context_files=True,
     skip_memory=True,
 )
-print(agent.chat(prompt))
-""".format(prompt=str(prompt_path), model=args.hermes_model)
+result = agent.chat(prompt)
+result_text = "" if result is None else str(result)
+if output_path:
+    Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+    Path(output_path).write_text(result_text.rstrip() + "\\n", encoding="utf-8")
+print(result_text)
+""".format(prompt=str(prompt_path), output=str(output_path) if output_path else None, model=args.hermes_model)
     with tempfile.NamedTemporaryFile("w", suffix=".py", encoding="utf-8", delete=False) as script_file:
         script_file.write(script)
         script_path = Path(script_file.name)
@@ -218,46 +276,13 @@ print(agent.chat(prompt))
         script_path.unlink(missing_ok=True)
 
 
-def run_repair_command(args: argparse.Namespace, request: dict, prompt_path: Path, repair_log: Path) -> int:
-    package = str(request.get("package", ""))
-    command_template = args.repair_command or os.environ.get("HERMES_REPAIR_COMMAND", "")
-    if not command_template:
-        print(f"📝 未配置修复命令，已生成提示文件: {prompt_path}")
-        print("   设置 HERMES_REPAIR_COMMAND 后可自动修复；本次将标记 permanent_failed。")
-        return 125
-
-    values = {
-        "prompt": str(prompt_path),
-        "package": package,
-        "host": args.host,
-        "remote_repo": args.remote_repo,
-        "remote_home_data_dir": args.remote_home_data_dir,
-        "repair_log": str(repair_log),
-    }
-    command = command_template.format(**values)
+def run_repair_command(args: argparse.Namespace, prompt_path: Path, repair_log: Path) -> int:
     repair_log.parent.mkdir(parents=True, exist_ok=True)
-    with repair_log.open("w", encoding="utf-8", errors="replace") as log:
-        log.write(f"# started_at: {now_iso()}\n# command: {command}\n\n")
-        log.flush()
-        exit_code = 124
-        try:
-            if command_template == "hermes-api":
-                exit_code = run_hermes_api_command(args, prompt_path, repair_log)
-            else:
-                proc = subprocess.run(command, shell=True, text=True, stdout=log, stderr=subprocess.STDOUT, timeout=args.repair_timeout, check=False)
-                exit_code = proc.returncode
-        except subprocess.TimeoutExpired:
-            log.write(f"\n# timed_out_after: {args.repair_timeout}\n")
-        finally:
-            cleanup_template = args.session_cleanup_command or os.environ.get("HERMES_SESSION_CLEANUP_COMMAND", "")
-            if cleanup_template:
-                cleanup_command = cleanup_template.format(**values)
-                log.write(f"\n# cleanup_started_at: {now_iso()}\n# cleanup_command: {cleanup_command}\n")
-                log.flush()
-                cleanup_proc = subprocess.run(cleanup_command, shell=True, text=True, stdout=log, stderr=subprocess.STDOUT, check=False)
-                log.write(f"# cleanup_exit_code: {cleanup_proc.returncode}\n")
-            log.write(f"\n# finished_at: {now_iso()}\n# exit_code: {exit_code}\n")
-        return exit_code
+    repair_log.write_text(f"# started_at: {now_iso()}\n# command: hermes-api\n\n", encoding="utf-8", errors="replace")
+    exit_code = run_hermes_api_command(args, prompt_path, repair_log)
+    with repair_log.open("a", encoding="utf-8", errors="replace") as log:
+        log.write(f"\n# finished_at: {now_iso()}\n# exit_code: {exit_code}\n")
+    return exit_code
 
 
 def process_request(args: argparse.Namespace, remote_failed_path: str) -> None:
@@ -290,7 +315,7 @@ def process_request(args: argparse.Namespace, remote_failed_path: str) -> None:
 
     repair_log = args.home_dir / "logs" / f"{name}-repair.log"
     print(f"🔧 处理失败请求: {package}")
-    exit_code = run_repair_command(args, request, prompt_path, repair_log)
+    exit_code = run_repair_command(args, prompt_path, repair_log)
 
     final_state = "fixed" if exit_code == 0 else "permanent_failed"
     request["state"] = final_state
@@ -305,14 +330,23 @@ def process_request(args: argparse.Namespace, remote_failed_path: str) -> None:
     ssh(args.host, f"mkdir -p {remote_quote(remote_queue_dir(args.remote_home_data_dir, final_state))}")
     write_remote_json(args.host, final_remote_path, request)
 
-    write_experience(experience_dir / f"{name}.md", request, final_state, repair_log)
+    experience_path = experience_dir / f"{name}.md"
+    write_experience_from_hermes(
+        args,
+        request,
+        final_state,
+        local_log,
+        repair_log,
+        experience_path,
+        local_pkg_dir / "experience_prompt.md",
+        local_pkg_dir / "experience_draft.md",
+    )
     print(f"✅ 已标记: {package} -> {final_state}")
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="x86 PC hermes 修复控制器")
+    parser = argparse.ArgumentParser(description="x86 PC hermes-api 修复控制器")
     parser.add_argument("--host", default=os.environ.get("HERMES_RISCV_HOST", ""), help="远端 SSH 主机，例如 bianbu@10.0.90.13")
-    parser.add_argument("--remote-repo", default=os.environ.get("HERMES_RISCV_REPO", ""), help="远端仓库路径")
     parser.add_argument(
         "--remote-home-data-dir",
         default=os.environ.get("HERMES_REMOTE_HOME_DATA_DIR", "~/.python_auto_build_hermes"),
@@ -320,10 +354,8 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--home-dir", type=Path, default=Path.home() / ".python_auto_build_hermes")
     parser.add_argument("--repair-timeout", type=int, default=int(os.environ.get("HERMES_REPAIR_TIMEOUT", "1800")))
-    parser.add_argument("--repair-command", default=os.environ.get("HERMES_REPAIR_COMMAND", ""))
     parser.add_argument("--hermes-venv-activate", default=os.environ.get("HERMES_VENV_ACTIVATE", "~/hermes_env/bin/activate"))
     parser.add_argument("--hermes-model", default=os.environ.get("HERMES_MODEL", "gpt-5.5"))
-    parser.add_argument("--session-cleanup-command", default=os.environ.get("HERMES_SESSION_CLEANUP_COMMAND", ""))
     parser.add_argument("--poll-interval", type=int, default=60)
     parser.add_argument("--once", action="store_true", help="只扫描处理一轮")
     return parser.parse_args()
