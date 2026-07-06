@@ -132,3 +132,9 @@ else
     echo "❌ 构建依赖安装失败"
     exit 1
 fi
+
+if sudo apt install -y openblas-spacemit; then
+    echo "✅ openblas-spacemit 安装成功"
+else
+    echo "⚠️ openblas-spacemit 安装失败，继续执行"
+fi
