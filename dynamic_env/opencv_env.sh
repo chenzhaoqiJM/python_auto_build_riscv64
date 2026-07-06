@@ -64,6 +64,8 @@ if [[ "$1" == "activate" ]]; then
         _opencv_INSTALL_PREFIX=/opt/Qt5.15.18
     elif [[ "$opencv_version" == "4.13.0.92" ]]; then
         _opencv_INSTALL_PREFIX=/opt/Qt5.15.18
+    elif [[ "$opencv_version" == "5.0.0.93" ]]; then
+        _opencv_INSTALL_PREFIX=/opt/Qt5.15.19
     elif version_le "$opencv_version" "4.12.0.88"; then
         _opencv_INSTALL_PREFIX=/opt/Qt5.15.16
     else
