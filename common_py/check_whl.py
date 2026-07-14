@@ -1,23 +1,37 @@
 import requests
 import sys
-import configparser
 import os
+import configparser
 
-config = configparser.ConfigParser()
-
-# 读取 pypirc.txt（你可以指定绝对路径）
 current_dir = os.path.dirname(os.path.abspath(__file__))
 pypirc_path = os.path.abspath(os.path.join(current_dir, "..", "pypirc.txt"))
-config.read(pypirc_path)
+home_pypirc_path = os.path.expanduser("~/.pypirc")
 
-# 获取 gitlab 的认证信息
-gitlab_repo = config.get('gitlab', 'repository')
-gitlab_pass = config.get('gitlab', 'password')
 
-# print(f"GitLab repo: {gitlab_repo}")
-# print(f"Password: {gitlab_pass}")
+def load_gitlab_config():
+    """
+    从项目 pypirc.txt 或 ~/.pypirc 中读取 GitLab 包仓库配置。
+    """
+    for path in (pypirc_path, home_pypirc_path):
+        if not os.path.isfile(path):
+            continue
 
-PRIVATE_TOKEN = gitlab_pass
+        config = configparser.ConfigParser()
+        config.read(path)
+        if not config.has_section("gitlab"):
+            continue
+
+        repo = config.get("gitlab", "repository", fallback="").strip()
+        if not repo:
+            continue
+
+        token = config.get("gitlab", "password", fallback="").strip()
+        return repo, token
+
+    raise RuntimeError(
+        "GitLab 配置缺失：请在项目根目录 pypirc.txt 或 ~/.pypirc 中配置 "
+        "[gitlab] repository/password"
+    )
 
 def get_latest_version_from_pypi(package_name, index_url='https://pypi.org/pypi'):
     """
@@ -44,13 +58,16 @@ def get_current_python_tag():
     minor = sys.version_info.minor
     return f"cp{major}{minor}"
 
-def has_whl_in_gitlab(package_name, version=None, project_id=33, token=PRIVATE_TOKEN):
+def has_whl_in_gitlab(package_name, version=None, project_id=33, token=None):
     """
     查询 GitLab 包仓库中是否存在当前 Python 版本可用的 .whl 文件。
     如果 version 为 None，则从 PyPI 获取最新版本号。
     """
     print("&&& 检查是否存在 whl ................")
     python_tag = get_current_python_tag()
+    gitlab_repo, config_token = load_gitlab_config()
+    if token is None:
+        token = config_token
 
     if version is None:
         version = get_latest_version_from_pypi(package_name)
