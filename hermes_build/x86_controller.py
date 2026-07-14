@@ -114,10 +114,25 @@ def expand_remote_home_dir(host: str, path: str) -> str:
     return path
 
 
-def make_prompt(request: dict, local_log: Path, experience_dir: Path) -> str:
+def make_prompt(request: dict, local_log: Path, experience_dir: Path, *, ssh_host: str = "") -> str:
     package = request.get("package", "")
     repo_root = request.get("repo_root", "")
-    python_version = request.get("python_version", "")
+    python_version = str(request.get("python_version", "")).strip()
+    ssh_target = ssh_host.strip() or "<HERMES_RISCV_HOST>"
+    ssh_target_cmd = shlex.quote(ssh_target) if ssh_host.strip() else "<HERMES_RISCV_HOST>"
+    remote_repo_cmd = shlex.quote(str(repo_root)) if repo_root else "<remote_repo_root>"
+    build_for_version_value = python_version or "<失败请求中的 python_version>"
+    build_for_version_export = (
+        f"export BUILD_FOR_VERSION={shlex.quote(build_for_version_value)}"
+        if python_version
+        else "export BUILD_FOR_VERSION=<失败请求中的 python_version>"
+    )
+    remote_build_command = (
+        f"cd {remote_repo_cmd} && export SAVE_FINAL_WHL_TO_HOME=0 && "
+        f"{build_for_version_export} && "
+        "~/python_auto_build_riscv64/build_most_common/build_from_src.sh <package_path>"
+    )
+    remote_build_example = f"ssh {ssh_target_cmd} {shlex.quote(remote_build_command)}"
     return f"""# Hermes RISC-V wheel 修复请求
 
 请修复 RISC-V 远端 Python wheel 构建失败，并在远端验证。
@@ -132,12 +147,22 @@ def make_prompt(request: dict, local_log: Path, experience_dir: Path) -> str:
 - src_build_script: {request.get('src_build_script', '')}
 - local_failed_log: {local_log}
 - local_experience_dir: {experience_dir}
+- remote_ssh_host: {ssh_target}
+
+## 远端连接方式
+
+你运行在 x86 controller 本机。所有读取远端仓库、远端日志、远端源码目录和执行构建验证的命令，都必须通过 controller 提供的 SSH 目标执行。
+
+- 远端命令模板：`ssh {ssh_target_cmd} '<remote command>'`
+- 远端拷贝模板：`scp {ssh_target_cmd}:<remote_path> <local_path>`
+
+不要只使用裸 IP，不要自行猜用户名或切换账号。如果遇到 host key 或权限错误，记录完整 SSH 错误并退出非 0，不要把未验证结果写成成功。
 
 ## 要求
 
 1. 先阅读失败日志，判断根因。
 2. 不要动构建脚本仓库。
-3. 需要验证时，在远端运行 build_from_src.sh。
+3. 需要验证时，通过上面的 SSH 目标在远端运行 build_from_src.sh。
 4. 修复成功后，把经验写入本地 experience markdown。
 5. 如果 30 分钟内无果，退出非 0，让 controller 标记 permanent_failed。
 
@@ -160,9 +185,13 @@ def make_prompt(request: dict, local_log: Path, experience_dir: Path) -> str:
 2. 下载用户指定包的源码包到该临时目录。
 3. 使用 `tar xzf` 解压源码包到临时目录。
 4. 如果用户要求源码修改、补丁或优化，只在该解压目录中修改，保留原始压缩包以便随时回退。
-5. 构建前设置环境变量：`SAVE_FINAL_WHL_TO_HOME=0`。
-6. 设置 `BUILD_FOR_VERSION`为 3.12
+5. 构建前设置环境变量：`export SAVE_FINAL_WHL_TO_HOME=0`。
+6. 设置 `BUILD_FOR_VERSION` 为失败请求里的 Python 版本 `{build_for_version_value}`：`{build_for_version_export}`。不要默认写成 3.12。
 7. 使用脚本 `~/python_auto_build_riscv64/build_most_common/build_from_src.sh` 构建， 用法：`~/python_auto_build_riscv64/build_most_common/build_from_src.sh <package_path>`。
+
+远端验证命令示例：
+
+`{remote_build_example}`
 """
 
 
@@ -311,7 +340,7 @@ def process_request(args: argparse.Namespace, remote_failed_path: str) -> None:
     prompt_path = local_pkg_dir / "hermes_prompt.md"
     experience_dir = args.home_dir / "experience"
     prompt_path.parent.mkdir(parents=True, exist_ok=True)
-    prompt_path.write_text(make_prompt(request, local_log, experience_dir), encoding="utf-8")
+    prompt_path.write_text(make_prompt(request, local_log, experience_dir, ssh_host=args.host), encoding="utf-8")
 
     repair_log = args.home_dir / "logs" / f"{name}-repair.log"
     print(f"🔧 处理失败请求: {package}")
