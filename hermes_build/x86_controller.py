@@ -166,6 +166,10 @@ def make_prompt(request: dict, local_log: Path, experience_dir: Path, *, ssh_hos
 4. 修复成功后，把经验写入本地 experience markdown。
 5. 如果 30 分钟内无果，退出非 0，让 controller 标记 permanent_failed。
 
+## 修复时的注意事项
+
+1. 如果某包是因为其依赖包构建失败导致的，尝试修复依赖包，不要去掉主包的依赖项去绕过问题，如果需要修改主包的依赖项，必须确保修改是安全和必要的。
+2. 如果需要在远程用户目录下放文件，放在 ~/hermes_temp/ 下，避免污染用户项目目录, 修复结束后清理。
 
 ## 修复时下载源码包
 
@@ -184,7 +188,7 @@ def make_prompt(request: dict, local_log: Path, experience_dir: Path, *, ssh_hos
 1. 在远程主机创建临时构建目录。
 2. 下载用户指定包的源码包到该临时目录。
 3. 使用 `tar xzf` 解压源码包到临时目录。
-4. 如果用户要求源码修改、补丁或优化，只在该解压目录中修改，保留原始压缩包以便随时回退。
+4. 如果需要源码修改、补丁或优化，只在该解压目录中修改，保留原始压缩包以便随时回退。
 5. 构建前设置环境变量：`export SAVE_FINAL_WHL_TO_HOME=0`。
 6. 设置 `BUILD_FOR_VERSION` 为失败请求里的 Python 版本 `{build_for_version_value}`：`{build_for_version_export}`。不要默认写成 3.12。
 7. 使用脚本 `~/python_auto_build_riscv64/build_most_common/build_from_src.sh` 构建， 用法：`~/python_auto_build_riscv64/build_most_common/build_from_src.sh <package_path>`。
@@ -192,6 +196,10 @@ def make_prompt(request: dict, local_log: Path, experience_dir: Path, *, ssh_hos
 远端验证命令示例：
 
 `{remote_build_example}`
+
+## 后处理流程
+
+修复完成或者判定修复失败后，需要清理远端临时构建目录，避免占用磁盘空间，以及确保修复时的编译进程已经结束。
 """
 
 
