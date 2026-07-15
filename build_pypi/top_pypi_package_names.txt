@@ -1688,7 +1688,6 @@ zstd
 policy-sentry
 pycep-parser
 piexif
-pyqt5
 llama-index-readers-llama-parse
 strip-hints
 parsimonious
@@ -1748,7 +1747,6 @@ eth-utils
 pastedeploy
 pyaes
 multimethod
-pyqt5-sip
 python-crfsuite
 rq
 prefect-aws
@@ -1799,7 +1797,6 @@ bitstring
 pytest-playwright
 pefile
 trimesh
-pyqt5-qt5
 dbt-bigquery
 safehttpx
 python-pam
@@ -2836,7 +2833,6 @@ isal
 onfido-python
 apache-airflow-providers-tableau
 androguard
-pyqt6
 types-ipaddress
 jsonschema-spec
 os-service-types
@@ -2911,12 +2907,10 @@ jinja2-time
 typing-utils
 codemagic-cli-tools
 apache-airflow-providers-salesforce
-pyside6-essentials
 django-ratelimit
 styleframe
 plotly-express
 swagger-spec-validator
-pyqt6-sip
 opentelemetry-resourcedetector-docker
 verspec
 breathe
@@ -2957,7 +2951,6 @@ pdfrw
 firecrawl-py
 array-api-compat
 flake8-eradicate
-pyqt6-qt6
 clean-fid
 jupyter-packaging
 openstacksdk
@@ -2976,7 +2969,6 @@ nose2
 google-cloud-documentai
 selenium-wire
 opentelemetry-instrumentation-aws-lambda
-pyside6
 mkdocs-section-index
 python-keystoneclient
 pydantic-xml
@@ -2986,7 +2978,6 @@ flake8-black
 django-widget-tweaks
 publish-event-sns
 resend
-pyside6-addons
 guppy3
 deep-translator
 deepeval
@@ -6370,7 +6361,6 @@ webrtcvad
 funcparserlib
 g2pkk
 betacal
-pyside2
 konlpy
 loky
 pyteomics
@@ -6519,7 +6509,6 @@ mkdocs-git-authors-plugin
 pyudorandom
 djangorestframework-guardian
 lazrs
-pyqt5-tools
 ropgadget
 espeakng-loader
 aiomqtt
@@ -8741,7 +8730,6 @@ ragstack-ai-knowledge-store
 types-waitress
 xdrlib3
 sagemaker-feature-store-pyspark-3-3
-pyqt6-webengine-qt6
 aws-glue-schema-registry
 zope-datetime
 python-ranges
@@ -8815,7 +8803,6 @@ django-markdownx
 logdecorator
 music21
 mlr
-pyqt6-webengine
 dockerspawner
 cmweather
 snscrape
@@ -11009,7 +10996,6 @@ jsonasobj2
 inlinestyler
 sttable
 pyzotero
-pyqt5-plugins
 cdklabs-appsync-utils
 pysorteddict
 mattermostwrapper
@@ -11043,7 +11029,6 @@ pylint-flask-sqlalchemy
 aws-cdk-aws-kinesisfirehose
 md2pdf
 overpy
-pyqt5-stubs
 basehash
 energycapsdk
 devpi-plumber
@@ -12256,7 +12241,6 @@ cargo-lambda
 firebirdsql
 django-downloadview
 types-prettytable
-pyqt6-tools
 mmh3cffi
 deciphon-core
 cabarchive
