@@ -31,8 +31,8 @@ if [[ "$1" == "activate" ]]; then
     export _ORIG_NPY_LAPACK_ORDER="${NPY_LAPACK_ORDER:-}"
 
     # 设置优化编译选项
-    export CFLAGS="-O3 -march=rv64gcv -ftree-vectorize -ffast-math"
-    export CXXFLAGS="-O3 -march=rv64gcv -ftree-vectorize -ffast-math"
+    export CFLAGS="-O3 -march=rv64gcv_zvl256b -ftree-vectorize -ffast-math"
+    export CXXFLAGS="-O3 -march=rv64gcv_zvl256b -ftree-vectorize -ffast-math"
     export NPY_BLAS_ORDER=openblas
     export NPY_LAPACK_ORDER=openblas
 
