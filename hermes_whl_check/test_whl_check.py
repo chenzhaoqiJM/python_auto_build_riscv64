@@ -7,6 +7,7 @@ import argparse
 import json
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 
 from hermes_whl_check import remote_worker, x86_controller
@@ -51,6 +52,24 @@ class RemoteWorkerRequestTest(unittest.TestCase):
         self.assertEqual(request["venv_python"], str(venv_dir / "bin" / "python"))
         self.assertEqual(request["install_log"], str(log_path))
         self.assertEqual(request["state"], "pending")
+
+    def test_create_and_install_package_creates_install_log_parent_dir(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            base_dir = Path(tmpdir)
+            install_log = base_dir / "logs" / "3to2" / "3.12" / "install.log"
+            venv_dir = base_dir / "venvs" / "3to2-py312"
+            args = argparse.Namespace(
+                index_url="https://example.invalid/simple",
+                extra_index_url="",
+                install_timeout=30,
+            )
+
+            with mock.patch.object(remote_worker, "run_logged", return_value=0):
+                exit_code = remote_worker.create_and_install_package(args, "3to2", "3.12", venv_dir, install_log)
+
+            self.assertEqual(exit_code, 0)
+            self.assertTrue(install_log.exists())
+            self.assertIn("# package: 3to2", install_log.read_text(encoding="utf-8"))
 
 
 class ControllerPromptTest(unittest.TestCase):

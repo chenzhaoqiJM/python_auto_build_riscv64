@@ -237,6 +237,7 @@ def make_test_request(
 
 
 def create_and_install_package(args: argparse.Namespace, package: str, python_version: str, venv_dir: Path, install_log: Path) -> int:
+    install_log.parent.mkdir(parents=True, exist_ok=True)
     install_log.write_text(
         f"# package: {package}\n# python_version: {python_version}\n# index_url: {args.index_url}\n",
         encoding="utf-8",
