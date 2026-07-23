@@ -8,6 +8,7 @@ import html.parser
 import json
 import os
 import re
+import shlex
 import subprocess
 import sys
 import time
@@ -205,6 +206,38 @@ def run_logged(
             return 124
 
 
+def run_logged_shell(
+    command: str,
+    log_path: Path,
+    *,
+    cwd: Path | None = None,
+    env: dict[str, str] | None = None,
+    timeout: int | None = None,
+) -> int:
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    with log_path.open("a", encoding="utf-8", errors="replace") as log:
+        log.write(f"\n# started_at: {now_iso()}\n# command: {command}\n\n")
+        log.flush()
+        try:
+            proc = subprocess.run(
+                command,
+                shell=True,
+                executable="/bin/bash",
+                cwd=cwd,
+                env=env,
+                stdout=log,
+                stderr=subprocess.STDOUT,
+                text=True,
+                timeout=timeout,
+                check=False,
+            )
+            log.write(f"\n# finished_at: {now_iso()}\n# exit_code: {proc.returncode}\n")
+            return proc.returncode
+        except subprocess.TimeoutExpired:
+            log.write(f"\n# timed_out_at: {now_iso()}\n# timeout: {timeout}\n")
+            return 124
+
+
 def refresh_package_list(repo_root: Path, package_fetch_python: str, refresh_log: Path) -> int:
     script = repo_root / "build_pypi" / "00get_spacemit_pkgs.py"
     return run_logged([package_fetch_python, str(script)], refresh_log, cwd=repo_root / "build_pypi")
@@ -249,28 +282,31 @@ def create_and_install_package(args: argparse.Namespace, package: str, python_ve
     if args.extra_index_url:
         env["UV_EXTRA_INDEX_URL"] = args.extra_index_url
 
-    uv_python_code = run_logged(["uv", "python", "install", python_version], install_log, env=env, timeout=args.install_timeout)
-    if uv_python_code != 0:
-        return uv_python_code
-
     venv_code = run_logged(["uv", "venv", str(venv_dir), f"--python={python_version}"], install_log, env=env, timeout=args.install_timeout)
     if venv_code != 0:
         return venv_code
 
-    install_cmd = [
-        "uv",
-        "pip",
-        "install",
-        "--python",
-        str(venv_dir / "bin" / "python"),
-        "--index-url",
-        args.index_url,
-        "--only-binary=:all:",
-    ]
+    activate_script = shlex.quote(str(venv_dir / "bin" / "activate"))
+    upgrade_pip_code = run_logged_shell(
+        f"source {activate_script} && uv pip install pip -U && deactivate",
+        install_log,
+        env=env,
+        timeout=args.install_timeout,
+    )
+    if upgrade_pip_code != 0:
+        return upgrade_pip_code
+
+    install_cmd = ["pip", "install", "--index-url", args.index_url, "--only-binary=:all:"]
     if args.extra_index_url:
         install_cmd.extend(["--extra-index-url", args.extra_index_url])
     install_cmd.append(package)
-    return run_logged(install_cmd, install_log, env=env, timeout=args.install_timeout)
+    install_command = " ".join(shlex.quote(str(part)) for part in install_cmd)
+    return run_logged_shell(
+        f"source {activate_script} && {install_command}",
+        install_log,
+        env=env,
+        timeout=args.install_timeout,
+    )
 
 
 def cleanup_venv(venv_dir: Path) -> None:

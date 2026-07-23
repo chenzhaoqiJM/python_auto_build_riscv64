@@ -65,11 +65,47 @@ class RemoteWorkerRequestTest(unittest.TestCase):
             )
 
             with mock.patch.object(remote_worker, "run_logged", return_value=0):
-                exit_code = remote_worker.create_and_install_package(args, "3to2", "3.12", venv_dir, install_log)
+                with mock.patch.object(remote_worker, "run_logged_shell", return_value=0):
+                    exit_code = remote_worker.create_and_install_package(args, "3to2", "3.12", venv_dir, install_log)
 
             self.assertEqual(exit_code, 0)
             self.assertTrue(install_log.exists())
             self.assertIn("# package: 3to2", install_log.read_text(encoding="utf-8"))
+
+    def test_create_and_install_package_uses_activated_venv_and_pip_install(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            base_dir = Path(tmpdir)
+            install_log = base_dir / "logs" / "demo_pkg" / "3.14" / "install.log"
+            venv_dir = base_dir / "env314"
+            args = argparse.Namespace(
+                index_url="https://example.invalid/simple",
+                extra_index_url="https://extra.example.invalid/simple",
+                install_timeout=30,
+            )
+
+            with mock.patch.object(remote_worker, "run_logged", return_value=0) as run_logged:
+                with mock.patch.object(remote_worker, "run_logged_shell", return_value=0) as run_logged_shell:
+                    exit_code = remote_worker.create_and_install_package(args, "demo-pkg", "3.14", venv_dir, install_log)
+
+            self.assertEqual(exit_code, 0)
+            run_logged.assert_called_once_with(
+                ["uv", "venv", str(venv_dir), "--python=3.14"],
+                install_log,
+                env=mock.ANY,
+                timeout=30,
+            )
+            shell_commands = [call.args[0] for call in run_logged_shell.call_args_list]
+            self.assertEqual(len(shell_commands), 2)
+            self.assertIn(f"source {venv_dir}/bin/activate", shell_commands[0])
+            self.assertIn("uv pip install pip -U", shell_commands[0])
+            self.assertIn("deactivate", shell_commands[0])
+            self.assertIn(f"source {venv_dir}/bin/activate", shell_commands[1])
+            self.assertIn("pip install", shell_commands[1])
+            self.assertIn("--index-url https://example.invalid/simple", shell_commands[1])
+            self.assertIn("--extra-index-url https://extra.example.invalid/simple", shell_commands[1])
+            self.assertIn("--only-binary=:all:", shell_commands[1])
+            self.assertIn("demo-pkg", shell_commands[1])
+            self.assertNotIn("uv pip install --python", shell_commands[1])
 
 
 class ControllerPromptTest(unittest.TestCase):

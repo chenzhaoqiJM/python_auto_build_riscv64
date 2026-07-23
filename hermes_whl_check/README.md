@@ -22,8 +22,9 @@ worker 会：
 - 调用 `build_pypi/00get_spacemit_pkgs.py` 生成 `build_pypi/packages_spacemit.log`
 - 依次检查 `3.12`、`3.13`、`3.14`
 - 先读取 simple index，若没有兼容 wheel 则标记 `skipped`
-- 用 `uv` 创建单包单版本临时 venv
-- 使用 `uv pip install --only-binary=:all:` 安装包
+- 用 `uv venv <venv> --python=<version>` 创建单包单版本临时 venv
+- 激活 venv 后用 `uv pip install pip -U` 更新 pip
+- 重新激活 venv 后使用普通 `pip install --only-binary=:all:` 安装包
 - 安装成功后写入 `queue/pending/*.json` 等待 x86 Hermes controller
 - 收到 `passed` 或 `failed` 后删除该包对应 venv，避免残留
 
