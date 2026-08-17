@@ -31,18 +31,20 @@ export UV_CACHE_DIR="$HOME/.cache/uv_version_single_$BUILD_FOR_VERSION"
 export XDG_CACHE_HOME="$HOME/.cache_version_single_uv_$BUILD_FOR_VERSION"
 export WHEELS_REPAIR_DIR="$HOME/.mywheel_repair/version_single_uv_$BUILD_FOR_VERSION"
 BUILD_TMPDIR="$HOME/.mytmp/version_single_uv_$BUILD_FOR_VERSION"
+export CARGO_HOME="$BUILD_TMPDIR/cargo-home"
 PIP_BUILD_TRACKER_DIR="$BUILD_TMPDIR/pip-build-tracker"
 VENV_NAME="version_single_uv_$BUILD_FOR_VERSION"
 VENV_DIR="$HOME/pyenvs/$VENV_NAME"
 DIST_DIR="$HOME/pyenvs/store"
 WHEEL_CACHE_DIR="$HOME/.mywheels/version_single_uv_$BUILD_FOR_VERSION"
 
-mkdir -p "$BUILD_TMPDIR" "$PIP_BUILD_TRACKER_DIR" "$WHEEL_CACHE_DIR" "$DIST_DIR" "$UV_CACHE_DIR" "$XDG_CACHE_HOME"
+mkdir -p "$BUILD_TMPDIR" "$PIP_BUILD_TRACKER_DIR" "$WHEEL_CACHE_DIR" "$DIST_DIR" "$UV_CACHE_DIR" "$XDG_CACHE_HOME" "$CARGO_HOME"
 
 export TMPDIR="$BUILD_TMPDIR"
 export PIP_BUILD_TRACKER="$PIP_BUILD_TRACKER_DIR"
 export PYTHONPATH="$VENV_DIR/lib/python$BUILD_FOR_VERSION/site-packages"
 echo "&&&- set PYTHONPATH to: $PYTHONPATH"
+echo "&&&- set CARGO_HOME to: $CARGO_HOME"
 
 # 动态环境变量
 ENV_LOADER_SH="$SCRIPT_DIR/../dynamic_env/env_loader.sh"
@@ -87,6 +89,7 @@ else
             echo "Removing tmp..........."
             rm -rf "$VENV_DIR" || echo "❌ Failed to remove venv"
             rm -rf "$BUILD_TMPDIR"/* || echo "❌ Failed to remove build tmp"
+            mkdir -p "$BUILD_TMPDIR" "$PIP_BUILD_TRACKER_DIR" "$WHEEL_CACHE_DIR" "$DIST_DIR" "$UV_CACHE_DIR" "$XDG_CACHE_HOME" "$CARGO_HOME"
             exit 1
         fi
     done
@@ -107,6 +110,7 @@ else
     echo "Removing tmp..........."
     rm -rf "$VENV_DIR" || echo "❌ Failed to remove venv"
     rm -rf "$BUILD_TMPDIR"/* || echo "❌ Failed to remove build tmp"
+    mkdir -p "$BUILD_TMPDIR" "$PIP_BUILD_TRACKER_DIR" "$WHEEL_CACHE_DIR" "$DIST_DIR" "$UV_CACHE_DIR" "$XDG_CACHE_HOME" "$CARGO_HOME"
 fi
 
 
@@ -116,6 +120,7 @@ for PACKAGE in "$@"; do
     command -v deactivate &>/dev/null && deactivate || true
     rm -rf "$VENV_DIR" || echo "❌ Failed to remove venv"
     rm -rf "$BUILD_TMPDIR"/* || echo "❌ Failed to remove build tmp"
+    mkdir -p "$BUILD_TMPDIR" "$PIP_BUILD_TRACKER_DIR" "$WHEEL_CACHE_DIR" "$DIST_DIR" "$UV_CACHE_DIR" "$XDG_CACHE_HOME" "$CARGO_HOME"
     rm -rf "$WHEEL_CACHE_DIR"/* || echo "❌ Failed to clean wheel cache"
 
     # 执行 00get_pkg_version.py 获取版本列表
@@ -144,6 +149,7 @@ for PACKAGE in "$@"; do
         command -v deactivate &>/dev/null && deactivate || true
         rm -rf "$VENV_DIR" || echo "❌ Failed to remove venv"
         rm -rf "$BUILD_TMPDIR"/* || echo "❌ Failed to remove build tmp"
+        mkdir -p "$BUILD_TMPDIR" "$PIP_BUILD_TRACKER_DIR" "$WHEEL_CACHE_DIR" "$DIST_DIR" "$UV_CACHE_DIR" "$XDG_CACHE_HOME" "$CARGO_HOME"
         rm -rf "$WHEEL_CACHE_DIR"/* || echo "❌ Failed to clean wheel cache"
 
         echo "📂 Copying venv..."
@@ -179,8 +185,11 @@ for PACKAGE in "$@"; do
 
         build_generic_package() {
 
-            NO_DEPS=$(python3 "$NO_DEPS_SCRIPT" "$PACKAGE_NAME")
+            NO_DEPS=$(python3 "$NO_DEPS_SCRIPT" "$PACKAGE")
             echo "⚙️  Extra pip flags: $NO_DEPS"
+
+            # Rust/PyO3 packages may block on Cargo's global package-cache lock.
+            find "$CARGO_HOME" -type f \( -name '.package-cache' -o -name '*.lock' \) -delete 2>/dev/null || true
 
             if ! pip wheel --verbose $NO_DEPS --wheel-dir="$WHEEL_CACHE_DIR" "$PACKAGE_WITH_VERSION"; then
                 echo "❌ Failed: $PACKAGE_WITH_VERSION"
