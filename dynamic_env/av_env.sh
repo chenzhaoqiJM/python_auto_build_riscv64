@@ -5,13 +5,80 @@
 # 维护激活状态
 : "${_AV_ENV_ACTIVE:=0}"
 
-# FFmpeg 安装前缀
-_AV_FFMPEG_PREFIX="/opt/ext/ffmpeg/ffmpeg-n7.0.2"
-# _AV_FFMPEG_PREFIX=" /usr/lib/riscv64-linux-gnu"
+_av_select_ffmpeg_tag() {
+    local av_version="$1"
+    local major minor patch
+
+    if [[ ! "$av_version" =~ ^([0-9]+)\.([0-9]+)(\.([0-9]+))?([[:alnum:].+-]*)?$ ]]; then
+        echo "[AvEnv] Error: unsupported av version '$av_version'" >&2
+        return 1
+    fi
+
+    major="${BASH_REMATCH[1]}"
+    minor="${BASH_REMATCH[2]}"
+    patch="${BASH_REMATCH[4]:-0}"
+
+    # 与 PyAV 各发布标签 scripts/activate.sh 的默认版本保持一致。
+    case "$major" in
+        7|8|9|10)
+            echo "n4.2"
+            ;;
+        11)
+            echo "n6.0"
+            ;;
+        12)
+            if (( minor == 0 )); then
+                echo "n6.0"
+            else
+                echo "n6.1.1"
+            fi
+            ;;
+        13)
+            if (( minor == 0 )); then
+                echo "n7.0.2"
+            else
+                echo "n7.1"
+            fi
+            ;;
+        14)
+            if (( minor <= 2 )); then
+                echo "n7.1"
+            else
+                echo "n7.1.1"
+            fi
+            ;;
+        15)
+            if (( minor == 0 )); then
+                echo "n7.1.1"
+            else
+                echo "n8.0"
+            fi
+            ;;
+        16)
+            echo "n8.0"
+            ;;
+        17)
+            if (( minor == 0 && patch == 0 )); then
+                echo "n8.0.1"
+            elif (( minor == 0 )); then
+                echo "n8.1"
+            else
+                echo "n8.1.1"
+            fi
+            ;;
+        18)
+            echo "n8.1.2"
+            ;;
+        *)
+            echo "[AvEnv] Error: no FFmpeg mapping for av==$av_version" >&2
+            return 1
+            ;;
+    esac
+}
 
 if [[ "$1" == "activate" ]]; then
 
-    if [[ "$2" != av* ]]; then
+    if [[ "$2" != "av" && "$2" != av==* ]]; then
         echo "[AvEnv] Skip: package '$2' is not av, no environment change"
         return 0
     fi
@@ -21,7 +88,19 @@ if [[ "$1" == "activate" ]]; then
         return 0
     fi
 
-    echo "[AvEnv] Activating AV environment, DIR = $_AV_FFMPEG_PREFIX"
+    _AV_PACKAGE_VERSION="${2#av==}"
+    if [[ "$2" == "av" ]]; then
+        # PyPI 当前最新 PyAV 18.x 使用 FFmpeg 8.1.2。
+        _AV_PACKAGE_VERSION="18.1.0"
+    fi
+
+    if ! _AV_FFMPEG_TAG="$(_av_select_ffmpeg_tag "$_AV_PACKAGE_VERSION")"; then
+        return 1
+    fi
+    _AV_FFMPEG_PREFIX="/opt/ext/ffmpeg/ffmpeg-${_AV_FFMPEG_TAG}"
+
+    echo "[AvEnv] Activating av==$_AV_PACKAGE_VERSION with FFmpeg $_AV_FFMPEG_TAG"
+    echo "[AvEnv] FFmpeg DIR = $_AV_FFMPEG_PREFIX"
 
     # 备份原有环境变量
     export _AV_ENV_OLD_LD_LIBRARY_PATH="$LD_LIBRARY_PATH"
