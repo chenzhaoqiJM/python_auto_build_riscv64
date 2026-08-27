@@ -37,12 +37,12 @@ _av_select_ffmpeg_tag() {
             if (( minor == 0 )); then
                 echo "n7.0.2"
             else
-                echo "n7.1"
+                echo "n7.1.1"
             fi
             ;;
         14)
             if (( minor <= 2 )); then
-                echo "n7.1"
+                echo "n7.1.1"
             else
                 echo "n7.1.1"
             fi
