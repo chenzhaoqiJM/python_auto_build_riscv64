@@ -88,9 +88,3 @@ download_targz_all "$BASE_URL/faiss" faiss faiss
 
 
 echo "✅ 第三方库下载完成"
-
-if sudo apt install -y openblas-spacemit; then
-    echo "✅ openblas-spacemit 安装成功"
-else
-    echo "⚠️ openblas-spacemit 安装失败，继续执行"
-fi
