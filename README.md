@@ -84,6 +84,15 @@ export BUILD_FOR_VERSION=3.12  # 支持: 3.9, 3.10, 3.11, 3.12, 3.13, 3.13t, 3.1
 ./build_one.sh numpy
 ```
 
+**依次构建多个 Python 版本**:
+```bash
+BUILD_FOR_VERSION="3.9 3.10 3.11" ./build_one.sh numpy scipy
+# 或使用逗号分隔
+BUILD_FOR_VERSIONS="3.12,3.13,3.14" ./build_one.sh numpy scipy
+```
+
+版本会按传入顺序逐个构建。每个版本使用独立的虚拟环境、缓存和失败日志；某个版本失败后会继续构建后续版本，全部完成后以失败状态退出。
+
 **从源码目录构建** (适合修改源码后的构建):
 ```bash
 ./build_from_src.sh /path/to/source/cmake-4.1.0

@@ -4,6 +4,47 @@ set -e
 # 当前脚本所在目录（支持相对路径执行）
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+# BUILD_FOR_VERSION 保持兼容单版本，也可直接传入多个版本。
+if [ -z "${BUILD_FOR_VERSIONS:-}" ] && [[ "${BUILD_FOR_VERSION:-}" == *" "* || "${BUILD_FOR_VERSION:-}" == *","* ]]; then
+    BUILD_FOR_VERSIONS="$BUILD_FOR_VERSION"
+    unset BUILD_FOR_VERSION
+fi
+
+# 支持 BUILD_FOR_VERSION="3.9 3.10" 或 BUILD_FOR_VERSIONS="3.9,3.10"。
+# 外层进程逐版本调用当前脚本，确保缓存、虚拟环境和环境变量彼此隔离。
+if [ -n "${BUILD_FOR_VERSIONS:-}" ]; then
+    if [ $# -eq 0 ]; then
+        echo "❌ 错误: 你必须传入至少一个包名作为参数。"
+        exit 1
+    fi
+
+    SCRIPT_EXIT_CODE=0
+    VALID_VERSION_COUNT=0
+    IFS=', ' read -r -a BUILD_VERSION_LIST <<< "$BUILD_FOR_VERSIONS"
+    for BUILD_VERSION in "${BUILD_VERSION_LIST[@]}"; do
+        if [ -z "$BUILD_VERSION" ]; then
+            continue
+        fi
+
+        VALID_VERSION_COUNT=$((VALID_VERSION_COUNT + 1))
+        echo "============================================="
+        echo "🚀 开始构建 Python $BUILD_VERSION"
+        echo "============================================="
+        if ! BUILD_FOR_VERSION="$BUILD_VERSION" BUILD_FOR_VERSIONS= "$0" "$@"; then
+            echo "❌ Python $BUILD_VERSION 构建失败"
+            SCRIPT_EXIT_CODE=1
+        else
+            echo "✅ Python $BUILD_VERSION 构建完成"
+        fi
+    done
+
+    if [ "$VALID_VERSION_COUNT" -eq 0 ]; then
+        echo "❌ 错误: BUILD_FOR_VERSIONS 未包含有效版本。"
+        exit 1
+    fi
+    exit "$SCRIPT_EXIT_CODE"
+fi
+
 # 设置uv环境
 # 加载公共函数
 source "$SCRIPT_DIR/../common_func.sh"
@@ -53,7 +94,7 @@ run_upload_script() {
         echo "🚀 Running upload script for $package_name"
         if ! timeout --foreground --kill-after=60s "${UPLOAD_TIMEOUT_SECONDS}s" python "$UPLOAD_SCRIPT"; then
             echo "⚠️ Upload script failed or timed out after ${UPLOAD_TIMEOUT_SECONDS}s for $package_name"
-            echo "$package_name" >> "$SCRIPT_DIR/failed_test.log"
+            echo "$package_name" >> "$FAILED_LOG"
             return 1
         fi
     else
@@ -85,8 +126,9 @@ if [ $# -eq 0 ]; then
     exit 1
 fi
 
-# ✅ 可选清空旧日志
-> "$SCRIPT_DIR/failed_test.log"
+# 当前版本单独记录失败包，避免多版本构建互相覆盖日志。
+FAILED_LOG="$SCRIPT_DIR/failed_test_${BUILD_FOR_VERSION}.log"
+> "$FAILED_LOG"
 
 # 清理旧虚拟环境
 if [ -d "$VENV_DIR" ]; then
@@ -189,7 +231,7 @@ for PACKAGE_NAME in "$@"; do
             return 100
         else
             echo "❌ Special builder failed: $PACKAGE_NAME"
-            echo "$PACKAGE_NAME" >> "$SCRIPT_DIR/failed_test.log"
+            echo "$PACKAGE_NAME" >> "$FAILED_LOG"
             return 1
         fi
     }
@@ -202,7 +244,7 @@ for PACKAGE_NAME in "$@"; do
 
         if ! pip wheel --verbose $NO_DEPS --wheel-dir="$WHEEL_CACHE_DIR" "$PACKAGE_NAME"; then
             echo "❌ Failed: $PACKAGE_NAME"
-            echo "$PACKAGE_NAME" >> "$SCRIPT_DIR/failed_test.log"
+            echo "$PACKAGE_NAME" >> "$FAILED_LOG"
             deactivate || true
             return 1
         fi
@@ -253,9 +295,9 @@ for PACKAGE_NAME in "$@"; do
     echo "---------------------------------------------"
 done
 
-if [ -s "$SCRIPT_DIR/failed_test.log" ]; then
+if [ -s "$FAILED_LOG" ]; then
     echo "❌ 以下包构建失败："
-    cat "$SCRIPT_DIR/failed_test.log"
+    cat "$FAILED_LOG"
     exit 1
 else
     echo "🎉 所有包均构建成功！"
