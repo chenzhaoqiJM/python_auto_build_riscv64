@@ -17,7 +17,7 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 parent_dir = os.path.abspath(current_dir)
 sys.path.insert(0, parent_dir)
 
-from fix_rpath_common import fix_so_rpaths_in_lib_dir, patch_rpath_all
+from fix_rpath_common import fix_so_rpaths_in_lib_dir, get_qt_install_prefix, patch_rpath_all
 
 def make_insert_code(qpa_platform: str) -> str:
     return f"""# ==== Custom insert start ====
@@ -90,8 +90,9 @@ def postprocess_whl_rpath_qt5(whl_path, skip_tag=["none", "cmake"]):
 
         qt5_lib_dir=qt5_dir/'Qt5'
         # copy qt5
-        print(f"$$$$-copy /opt/Qt5.15.16 to dir {str(qt5_lib_dir)}")
-        subprocess.run(["cp", "-ra", '/opt/Qt5.15.16', str(qt5_lib_dir)], check=True)
+        qt_install_prefix = get_qt_install_prefix(expected_major=5)
+        print(f"$$$$-copy {qt_install_prefix} to dir {str(qt5_lib_dir)}")
+        subprocess.run(["cp", "-ra", str(qt_install_prefix), str(qt5_lib_dir)], check=True)
         subprocess.run(["rm", "-rf", str(qt5_lib_dir/'bin')], check=True)
         subprocess.run(["rm", "-rf", str(qt5_lib_dir/'doc')], check=True)
         subprocess.run(["rm", "-rf", str(qt5_lib_dir/'include')], check=True)

@@ -36,6 +36,15 @@ source "$SCRIPT_DIR/../common_func.sh"
 # 调用检查函数
 check_build_version
 
+# PyQt/PySide 源码构建必须显式指定 Qt 安装目录。PACKAGE_NAME_REAL 可用于
+# pyside-setup 等无法仅凭源码目录名准确识别包名的情况。
+for PACKAGE_SOURCE_ARG in "$@"; do
+    PACKAGE_SOURCE_ARG="${PACKAGE_SOURCE_ARG%/}"
+    PACKAGE_SOURCE_BASENAME="$(basename "$PACKAGE_SOURCE_ARG")"
+    PACKAGE_NAME_FOR_QT_CHECK="${PACKAGE_NAME_REAL:-$PACKAGE_SOURCE_BASENAME}"
+    require_qt_install_prefix_for_package "$PACKAGE_NAME_FOR_QT_CHECK" || exit 1
+done
+
 ensure_uv
 uv python install $BUILD_FOR_VERSION
 

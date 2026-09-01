@@ -52,6 +52,11 @@ source "$SCRIPT_DIR/../common_func.sh"
 # 调用检查函数
 check_build_version
 
+# PyQt/PySide 构建必须显式指定 Qt 安装目录。
+for PACKAGE_ARG in "$@"; do
+    require_qt_install_prefix_for_package "$PACKAGE_ARG" || exit 1
+done
+
 ensure_uv
 uv python install $BUILD_FOR_VERSION
 

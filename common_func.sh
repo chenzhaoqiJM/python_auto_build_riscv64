@@ -35,6 +35,41 @@ ensure_uv() {
     fi
 }
 
+# 判断包名（或源码目录名）是否属于需要外部 Qt 的 Python Qt 绑定。
+is_qt_binding_package() {
+    _qt_package_name=$(basename "${1%/}" | tr '[:upper:]_' '[:lower:]-')
+    case "$_qt_package_name" in
+        pyqt5*|pyqt6*|pyside2*|pyside6*|pyside-setup*) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
+# Qt 绑定必须显式指定本次构建使用的 Qt，避免编译和 wheel 修复使用不同版本。
+require_qt_install_prefix_for_package() {
+    if ! is_qt_binding_package "$1"; then
+        return 0
+    fi
+
+    if [ -z "${QT_INSTALL_PREFIX:-}" ]; then
+        echo "❌ 错误: 构建 $1 必须设置环境变量 QT_INSTALL_PREFIX"
+        echo "    例如: export QT_INSTALL_PREFIX=/opt/Qt6.9.2"
+        return 1
+    fi
+
+    if [ ! -d "$QT_INSTALL_PREFIX" ]; then
+        echo "❌ 错误: QT_INSTALL_PREFIX 目录不存在: $QT_INSTALL_PREFIX"
+        return 1
+    fi
+
+    if [ ! -d "$QT_INSTALL_PREFIX/lib" ]; then
+        echo "❌ 错误: Qt lib 目录不存在: $QT_INSTALL_PREFIX/lib"
+        return 1
+    fi
+
+    export QT_INSTALL_PREFIX
+    echo "✅ $1 使用 Qt 路径: $QT_INSTALL_PREFIX"
+}
+
 
 # 判断是否为 Python 3.13t / 3.14t（free-threading）
 is_python_t_interpreter() {

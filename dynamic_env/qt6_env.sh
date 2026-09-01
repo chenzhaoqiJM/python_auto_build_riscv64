@@ -10,18 +10,19 @@
 
 if [[ "$1" == "activate" ]]; then
 
-    if [[ "$2" != pyqt6* ]]; then
-        echo "[pyqt6Env] Skip: package '$2' is not pyqt6, no environment change"
+    pkg_lower="${2,,}"
+    if [[ "$pkg_lower" != pyqt6* && "$pkg_lower" != pyside6* && "$pkg_lower" != pyside-setup* ]]; then
+        echo "[pyqt6Env] Skip: package '$2' does not use Qt6, no environment change"
         return 0
     fi
 
     local pkg="$2"
-    pyqt6_INSTALL_PREFIX=/opt/Qt6.9.2
+    pyqt6_INSTALL_PREFIX="${QT_INSTALL_PREFIX:-}"
 
     if [[ -z "$pyqt6_INSTALL_PREFIX" ]]; then
-        echo "[pyqt6Env] No pyqt6 path configured for package: $pkg"
+        echo "[pyqt6Env] QT_INSTALL_PREFIX is required for package: $pkg"
         _pyqt6_ENV_ACTIVE=0
-        return 0
+        return 1
     fi
 
     if [[ "$_pyqt6_ENV_ACTIVE" -eq 1 ]]; then
@@ -35,6 +36,9 @@ if [[ "$1" == "activate" ]]; then
 
     export _pyqt6_ENV_OLD_PATH="$PATH"
     export PATH="${pyqt6_INSTALL_PREFIX}/bin:${PATH}"
+
+    export _pyqt6_ENV_OLD_QTDIR="${QTDIR-}"
+    export QTDIR="$pyqt6_INSTALL_PREFIX"
 
     echo "[pyqt6Env] PATH is: $PATH"
 
@@ -62,6 +66,15 @@ elif [[ "$1" == "deactivate" ]]; then
     if [[ -n "${_pyqt6_ENV_OLD_PATH:-}" ]]; then
         export PATH="$_pyqt6_ENV_OLD_PATH"
         unset _pyqt6_ENV_OLD_PATH
+    fi
+
+    if [[ -n "${_pyqt6_ENV_OLD_QTDIR+x}" ]]; then
+        if [[ -n "$_pyqt6_ENV_OLD_QTDIR" ]]; then
+            export QTDIR="$_pyqt6_ENV_OLD_QTDIR"
+        else
+            unset QTDIR
+        fi
+        unset _pyqt6_ENV_OLD_QTDIR
     fi
     
     _pyqt6_ENV_ACTIVE=0

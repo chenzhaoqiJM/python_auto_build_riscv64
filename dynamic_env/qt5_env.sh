@@ -10,18 +10,19 @@
 
 if [[ "$1" == "activate" ]]; then
 
-    if [[ "$2" != pyqt5* ]]; then
-        echo "[pyqt5Env] Skip: package '$2' is not pyqt5, no environment change"
+    pkg_lower="${2,,}"
+    if [[ "$pkg_lower" != pyqt5* && "$pkg_lower" != pyside2* ]]; then
+        echo "[pyqt5Env] Skip: package '$2' does not use Qt5, no environment change"
         return 0
     fi
 
     local pkg="$2"
-    pyqt5_INSTALL_PREFIX=/opt/Qt5.15.16
+    pyqt5_INSTALL_PREFIX="${QT_INSTALL_PREFIX:-}"
 
     if [[ -z "$pyqt5_INSTALL_PREFIX" ]]; then
-        echo "[pyqt5Env] No pyqt5 path configured for package: $pkg"
+        echo "[pyqt5Env] QT_INSTALL_PREFIX is required for package: $pkg"
         _pyqt5_ENV_ACTIVE=0
-        return 0
+        return 1
     fi
 
     if [[ "$_pyqt5_ENV_ACTIVE" -eq 1 ]]; then
@@ -35,6 +36,9 @@ if [[ "$1" == "activate" ]]; then
 
     export _pyqt5_ENV_OLD_PATH="$PATH"
     export PATH="${pyqt5_INSTALL_PREFIX}/bin:${PATH}"
+
+    export _pyqt5_ENV_OLD_QTDIR="${QTDIR-}"
+    export QTDIR="$pyqt5_INSTALL_PREFIX"
 
     echo "[pyqt5Env] PATH is: $PATH"
 
@@ -62,6 +66,15 @@ elif [[ "$1" == "deactivate" ]]; then
     if [[ -n "${_pyqt5_ENV_OLD_PATH:-}" ]]; then
         export PATH="$_pyqt5_ENV_OLD_PATH"
         unset _pyqt5_ENV_OLD_PATH
+    fi
+
+    if [[ -n "${_pyqt5_ENV_OLD_QTDIR+x}" ]]; then
+        if [[ -n "$_pyqt5_ENV_OLD_QTDIR" ]]; then
+            export QTDIR="$_pyqt5_ENV_OLD_QTDIR"
+        else
+            unset QTDIR
+        fi
+        unset _pyqt5_ENV_OLD_QTDIR
     fi
     
     _pyqt5_ENV_ACTIVE=0

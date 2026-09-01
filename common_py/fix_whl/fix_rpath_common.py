@@ -10,6 +10,28 @@ import stat
 import pathlib
 from typing import Union
 
+
+def get_qt_install_prefix(expected_major: int) -> Path:
+    """Return the explicitly selected Qt prefix after basic validation."""
+    value = os.environ.get("QT_INSTALL_PREFIX", "").strip()
+    if not value:
+        raise RuntimeError(
+            "QT_INSTALL_PREFIX is required when repairing a PyQt/PySide wheel"
+        )
+
+    prefix = Path(value).expanduser().resolve()
+    if not prefix.is_dir():
+        raise FileNotFoundError(f"QT_INSTALL_PREFIX does not exist: {prefix}")
+    if not (prefix / "lib").is_dir():
+        raise FileNotFoundError(f"Qt lib directory does not exist: {prefix / 'lib'}")
+
+    qt_major = expected_major
+    version_markers = list((prefix / "lib" / "cmake").rglob(f"Qt{qt_major}Config.cmake"))
+    if (prefix / "lib" / "cmake").is_dir() and not version_markers:
+        print(f"⚠️ QT_INSTALL_PREFIX 未检测到 Qt{qt_major} CMake 配置: {prefix}")
+
+    return prefix
+
 def run_ldd(path):
     try:
         return subprocess.check_output(["ldd", str(path)], text=True)

@@ -16,7 +16,7 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 parent_dir = os.path.abspath(current_dir)
 sys.path.insert(0, parent_dir)
 
-from fix_rpath_common import fix_so_rpaths_in_lib_dir, patch_rpath_all
+from fix_rpath_common import fix_so_rpaths_in_lib_dir, get_qt_install_prefix, patch_rpath_all
 
 
 def postprocess_whl_rpath_qt6(whl_path, skip_tag=["none", "cmake"]):
@@ -49,8 +49,9 @@ def postprocess_whl_rpath_qt6(whl_path, skip_tag=["none", "cmake"]):
 
         qt6_lib_dir=qt6_dir/'Qt6'
         # copy qt6
-        print(f"$$$$-copy /opt/Qt6.9.2 to dir {str(qt6_lib_dir)}")
-        subprocess.run(["cp", "-ra", '/opt/Qt6.9.2', str(qt6_lib_dir)], check=True)
+        qt_install_prefix = get_qt_install_prefix(expected_major=6)
+        print(f"$$$$-copy {qt_install_prefix} to dir {str(qt6_lib_dir)}")
+        subprocess.run(["cp", "-ra", str(qt_install_prefix), str(qt6_lib_dir)], check=True)
         subprocess.run(["rm", "-rf", str(qt6_lib_dir/'bin')], check=True)
         subprocess.run(["rm", "-rf", str(qt6_lib_dir/'include')], check=True)
         
