@@ -39,7 +39,7 @@ ensure_uv() {
 is_qt_binding_package() {
     _qt_package_name=$(basename "${1%/}" | tr '[:upper:]_' '[:lower:]-')
     case "$_qt_package_name" in
-        pyqt5*|pyqt6*|pyside2*|pyside6*|pyside-setup*) return 0 ;;
+        pyqt5*|pyqt6*|pyside2*|pyside6*|pyside-setup*|pyside-pyside*) return 0 ;;
         *) return 1 ;;
     esac
 }
