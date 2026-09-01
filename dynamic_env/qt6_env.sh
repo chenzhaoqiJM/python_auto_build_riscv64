@@ -10,7 +10,7 @@
 
 if [[ "$1" == "activate" ]]; then
 
-    pkg_lower="${2,,}"
+    pkg_lower="$(printf "%s" "$2" | tr '[:upper:]' '[:lower:]')"
     if [[ "$pkg_lower" != pyqt6* && "$pkg_lower" != pyside6* && "$pkg_lower" != pyside-setup* ]]; then
         echo "[pyqt6Env] Skip: package '$2' does not use Qt6, no environment change"
         return 0
