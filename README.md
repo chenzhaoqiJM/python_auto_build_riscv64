@@ -2,6 +2,8 @@
 
 本项目用于在 RISC-V 架构 (riscv64) 的 Bianbu Linux 系统上自动化构建 Python wheel 包，并上传至 Spacemit GitLab PyPI 仓库。
 
+Spacemit GitLab PyPI 仓库地址：https://git.spacemit.com/groups/archive/-/packages/
+
 ## 目录结构
 
 ```
