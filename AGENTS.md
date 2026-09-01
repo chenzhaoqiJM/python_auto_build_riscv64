@@ -1,50 +1,50 @@
 ---
 description: "Use when editing python_auto_build scripts, Python build helpers, shell automation, dynamic_env modules, special_care builders, wheel repair or upload logic. Covers concise project coding conventions for RISC-V Python wheel automation."
-name: "python_auto_build 项目编程规范"
+name: "python_auto_build Project Coding Guidelines"
 applyTo: ["**/*.py", "**/*.sh", "**/*.md"]
 ---
 
-# python_auto_build 项目编程规范
+# python_auto_build Project Coding Guidelines
 
-本项目用于在 Bianbu Linux / riscv64 环境下自动化构建、修复、测试并上传 Python wheel 包。修改时优先保持脚本简单、可直接在目标环境执行、便于排障。
+This project automates building, repairing, testing, and uploading Python wheel packages in a Bianbu Linux / riscv64 environment. When making changes, prioritize keeping scripts simple, directly executable in the target environment, and easy to troubleshoot.
 
-## 通用原则
+## General Principles
 
-- 优先做最小改动，避免引入不必要的框架、抽象层或新依赖。
-- 保持现有目录职责：通用逻辑放 `common_py/`、包特殊构建放 `special_care/`、动态环境放 `dynamic_env/`、需要特殊处理的包的可自动构建的包的脚本放 `build_*`。
-- 修改构建流程时必须考虑 `BUILD_FOR_VERSION`，支持 `3.9` 到 `3.14t` 的现有版本约定。
-- 不要硬编码个人本地路径；确需缓存或临时目录时沿用 `$HOME/.cache*`、`$HOME/.mytmp*`、`$HOME/pyenvs*` 等现有模式。
-- 涉及上传、删除、覆盖包等高风险操作时，保留清晰日志并避免静默失败。
+- Prefer minimal changes and avoid introducing unnecessary frameworks, abstraction layers, or new dependencies.
+- Preserve existing directory responsibilities: place common logic in `common_py/`, package-specific builds in `special_care/`, dynamic environments in `dynamic_env/`, and automated build scripts for packages requiring special handling under `build_*`.
+- When modifying the build process, always account for `BUILD_FOR_VERSION` and support the existing version convention from `3.9` through `3.14t`.
+- Do not hard-code personal local paths. When caches or temporary directories are necessary, follow existing patterns such as `$HOME/.cache*`, `$HOME/.mytmp*`, and `$HOME/pyenvs*`.
+- For high-risk operations such as uploading, deleting, or overwriting packages, retain clear logs and avoid silent failures.
 
-## Shell 脚本约定
+## Shell Script Conventions
 
-- 新增 Bash 脚本优先使用 `#!/bin/bash` 与 `set -e`；需要 POSIX sh 时才使用 `#!/usr/bin/env sh`。
-- 路径基于脚本目录计算：`SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"`，避免依赖当前工作目录。
-- 复用 `common_func.sh`、`env_common.sh`、`dynamic_env/env_loader.sh`，不要复制已有函数。
-- 变量引用默认加双引号；包名、路径、版本号都按可能包含特殊字符处理。
-- 动态环境必须成对考虑 `load_env` / `unload_env`，避免污染后续包构建。
+- For new Bash scripts, prefer `#!/bin/bash` and `set -e`; use `#!/usr/bin/env sh` only when POSIX sh is required.
+- Calculate paths relative to the script directory: `SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"`. Avoid relying on the current working directory.
+- Reuse `common_func.sh`, `env_common.sh`, and `dynamic_env/env_loader.sh`; do not duplicate existing functions.
+- Double-quote variable expansions by default. Treat package names, paths, and version numbers as potentially containing special characters.
+- Always use dynamic environments with matching `load_env` / `unload_env` calls to avoid contaminating subsequent package builds.
 
-## Python 代码约定
+## Python Code Conventions
 
-- Python 脚本保持标准库优先；只有现有项目已经依赖或确有必要时才新增第三方依赖。
-- 通用能力写成小函数，包级特殊逻辑写在 `special_care/build_<pkg>.py`，并通过 `registry.py` 的装饰器注册。
-- 网络下载、GitLab 查询、上传等不稳定操作应有重试或明确错误输出。
-- 解析包名时兼容 `name` 和 `name==version` 两种形式，避免破坏版本构建脚本。
-- 日志保持可读，沿用项目中中文说明和 emoji 状态提示风格即可；错误信息要包含包名或关键路径。
+- Prefer the Python standard library. Add a third-party dependency only when the project already depends on it or it is genuinely necessary.
+- Implement common capabilities as small functions. Put package-specific logic in `special_care/build_<pkg>.py` and register it with a decorator from `registry.py`.
+- Unreliable operations such as network downloads, GitLab queries, and uploads should include retries or explicit error output.
+- When parsing package names, support both `name` and `name==version` forms to avoid breaking version build scripts.
+- Keep logs readable. Follow the project's style of explanatory messages and emoji status indicators; error messages must include the package name or a relevant path.
 
-## Wheel 与构建兼容性
+## Wheel and Build Compatibility
 
-- 修改 wheel 修复逻辑时，优先保持 manylinux 标签、rpath、`.libs` 处理和 abi3/free-threading 兼容性。
-- 涉及 glibc、RISC-V、RVV、Qt、OpenCV、Arrow、FFmpeg、MuJoCo、CycloneDDS、Faiss 等环境时，优先通过 `dynamic_env/` 增量配置。
-- 新增特殊包构建时先检查是否已有 whl、是否需要源码 patch、是否需要额外系统库。
+- When modifying wheel repair logic, preserve compatibility with manylinux tags, rpath handling, `.libs` processing, abi3, and free-threading.
+- For environments involving glibc, RISC-V, RVV, Qt, OpenCV, Arrow, FFmpeg, MuJoCo, CycloneDDS, Faiss, and similar components, prefer incremental configuration through `dynamic_env/`.
+- Before adding a special package build, check whether a wheel already exists, whether a source patch is required, and whether additional system libraries are needed.
 
-## 验证建议
+## Verification Guidelines
 
-- 修改 Python 文件后，至少运行语法检查或目标脚本的轻量入口检查。
-- 修改 Shell 脚本后，至少运行 `bash -n` 检查语法；能在目标环境执行时再做实际构建验证。
-- 不要在未确认目标 riscv64/Bianbu 环境的情况下声称构建成功。
+- After modifying a Python file, run at least a syntax check or a lightweight entry-point check for the target script.
+- After modifying a shell script, run at least `bash -n` to check its syntax. Perform an actual build verification only when the target environment is available.
+- Do not claim that a build succeeded unless it has been confirmed in the target riscv64/Bianbu environment.
 
-## 后期维护
+## Ongoing Maintenance
 
-- 新增规范时优先追加到对应小节，保持条目短句化。
-- 如果某条规则只适用于单个包，请写到对应 `special_care/build_<pkg>.py` 附近的注释或 README，而不是放进本文件。
+- Add new guidelines to the relevant section and keep each item concise.
+- If a rule applies to only one package, document it in a comment near the corresponding `special_care/build_<pkg>.py` file or in a README instead of adding it to this file.
