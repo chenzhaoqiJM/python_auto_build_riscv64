@@ -16,9 +16,6 @@ if { [[ -n "${BASH_VERSION:-}" && "$QT_SRC_ENV_FILE" == "$0" ]] \
     exit 1
 fi
 
-QT_SRC_ENV_SCRIPT_DIR="$(cd "$(dirname "$QT_SRC_ENV_FILE")" && pwd)"
-QT_DYNAMIC_ENV_LOADER="$QT_SRC_ENV_SCRIPT_DIR/../../dynamic_env/env_loader.sh"
-
 qt_read_prompt() {
     printf "%s" "$1"
     IFS= read -r "$2"
@@ -84,42 +81,31 @@ done
 
 export QT_INSTALL_PREFIX="$QT_PREFIX_RESOLVED"
 export PACKAGE_NAME_REAL="${QT_PACKAGE_NAME}==${QT_PACKAGE_VERSION}"
+export QTDIR="$QT_INSTALL_PREFIX"
 
-if [[ ! -f "$QT_DYNAMIC_ENV_LOADER" ]]; then
-    echo "❌ 找不到动态环境加载器: $QT_DYNAMIC_ENV_LOADER"
-    unset QT_SRC_ENV_SCRIPT_DIR QT_DYNAMIC_ENV_LOADER
-    return 1
-fi
+case ":${PATH:-}:" in
+    *":$QT_INSTALL_PREFIX/bin:"*) ;;
+    *) export PATH="$QT_INSTALL_PREFIX/bin${PATH:+:$PATH}" ;;
+esac
 
-# 重复加载脚本时，先恢复上一次由本脚本激活的动态环境。
-if [[ "${_pyqt5_ENV_ACTIVE:-0}" == "1" || "${_pyqt6_ENV_ACTIVE:-0}" == "1" ]] \
-    && declare -F unload_env >/dev/null 2>&1; then
-    echo "正在卸载上一次 Qt 动态环境……"
-    unload_env
-fi
-
-source "$QT_DYNAMIC_ENV_LOADER" "$PACKAGE_NAME_REAL"
-if ! load_env; then
-    echo "❌ Qt 动态环境加载失败"
-    unset QT_SRC_ENV_SCRIPT_DIR QT_DYNAMIC_ENV_LOADER
-    return 1
-fi
+case ":${LD_LIBRARY_PATH:-}:" in
+    *":$QT_INSTALL_PREFIX/lib:"*) ;;
+    *) export LD_LIBRARY_PATH="$QT_INSTALL_PREFIX/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" ;;
+esac
 
 echo ""
 echo "已设置环境变量："
 echo "  QT_INSTALL_PREFIX=$QT_INSTALL_PREFIX"
 echo "  PACKAGE_NAME_REAL=$PACKAGE_NAME_REAL"
-echo "  QTDIR=${QTDIR:-}"
+echo "  QTDIR=$QTDIR"
+echo "  PATH=$PATH"
+echo "  LD_LIBRARY_PATH=$LD_LIBRARY_PATH"
 echo "  qmake=$(command -v qmake 2>/dev/null || true)"
 echo ""
 echo "接下来可执行："
 echo "  pip wheel . --no-build-isolation -w /path/to/wheel-dir"
 echo "  ./build_most_common/build_from_src.sh /path/to/source"
-echo ""
-echo "手动构建结束后可执行以下命令恢复动态环境："
-echo "  unload_env"
-
 unset QT_PKG_CHOICE QT_PACKAGE_NAME QT_EXPECTED_MAJOR QT_PACKAGE_VERSION
 unset QT_PREFIX_DEFAULT QT_PREFIX_INPUT QT_PREFIX_RESOLVED
-unset QT_SRC_ENV_FILE QT_SRC_ENV_SCRIPT_DIR QT_DYNAMIC_ENV_LOADER
+unset QT_SRC_ENV_FILE
 unset -f qt_read_prompt
