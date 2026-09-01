@@ -1,0 +1,109 @@
+#!/bin/bash
+
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+    echo "❌ 此脚本需要通过 source 加载，否则环境变量不会保留："
+    echo "    source ${BASH_SOURCE[0]}"
+    exit 1
+fi
+
+QT_SRC_ENV_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+QT_DYNAMIC_ENV_LOADER="$QT_SRC_ENV_SCRIPT_DIR/../../dynamic_env/env_loader.sh"
+
+echo "========================================"
+echo "Qt Python 绑定构建环境配置"
+echo "========================================"
+echo ""
+echo "请选择要构建的包："
+echo "  1) pyqt5"
+echo "  2) pyqt6"
+echo "  3) pyside2"
+echo "  4) pyside6"
+
+read -r -p "请输入选项编号 (1-4): " QT_PKG_CHOICE
+while [[ ! "$QT_PKG_CHOICE" =~ ^[1-4]$ ]]; do
+    read -r -p "输入无效，请输入 1-4: " QT_PKG_CHOICE
+done
+
+case "$QT_PKG_CHOICE" in
+    1)
+        QT_PACKAGE_NAME="pyqt5"
+        QT_EXPECTED_MAJOR=5
+        ;;
+    2)
+        QT_PACKAGE_NAME="pyqt6"
+        QT_EXPECTED_MAJOR=6
+        ;;
+    3)
+        QT_PACKAGE_NAME="pyside2"
+        QT_EXPECTED_MAJOR=5
+        ;;
+    4)
+        QT_PACKAGE_NAME="pyside6"
+        QT_EXPECTED_MAJOR=6
+        ;;
+esac
+
+read -r -p "请输入 ${QT_PACKAGE_NAME} 版本号: " QT_PACKAGE_VERSION
+while [[ -z "$QT_PACKAGE_VERSION" ]]; do
+    read -r -p "版本号不能为空，请重新输入: " QT_PACKAGE_VERSION
+done
+
+QT_PREFIX_DEFAULT="${QT_INSTALL_PREFIX:-/opt/Qt${QT_EXPECTED_MAJOR}}"
+while true; do
+    read -r -p "请输入 Qt${QT_EXPECTED_MAJOR} 安装目录 (默认 ${QT_PREFIX_DEFAULT}): " QT_PREFIX_INPUT
+    QT_PREFIX_INPUT="${QT_PREFIX_INPUT:-$QT_PREFIX_DEFAULT}"
+
+    if [[ ! -d "$QT_PREFIX_INPUT" ]]; then
+        echo "❌ Qt 安装目录不存在: $QT_PREFIX_INPUT"
+        continue
+    fi
+
+    if [[ ! -d "$QT_PREFIX_INPUT/lib" ]]; then
+        echo "❌ Qt lib 目录不存在: $QT_PREFIX_INPUT/lib"
+        continue
+    fi
+
+    QT_PREFIX_RESOLVED="$(cd "$QT_PREFIX_INPUT" && pwd -P)"
+    break
+done
+
+export QT_INSTALL_PREFIX="$QT_PREFIX_RESOLVED"
+export PACKAGE_NAME_REAL="${QT_PACKAGE_NAME}==${QT_PACKAGE_VERSION}"
+
+if [[ ! -f "$QT_DYNAMIC_ENV_LOADER" ]]; then
+    echo "❌ 找不到动态环境加载器: $QT_DYNAMIC_ENV_LOADER"
+    unset QT_SRC_ENV_SCRIPT_DIR QT_DYNAMIC_ENV_LOADER
+    return 1
+fi
+
+# 重复加载脚本时，先恢复上一次由本脚本激活的动态环境。
+if [[ "${_pyqt5_ENV_ACTIVE:-0}" == "1" || "${_pyqt6_ENV_ACTIVE:-0}" == "1" ]] \
+    && declare -F unload_env >/dev/null 2>&1; then
+    echo "正在卸载上一次 Qt 动态环境……"
+    unload_env
+fi
+
+source "$QT_DYNAMIC_ENV_LOADER" "$PACKAGE_NAME_REAL"
+if ! load_env; then
+    echo "❌ Qt 动态环境加载失败"
+    unset QT_SRC_ENV_SCRIPT_DIR QT_DYNAMIC_ENV_LOADER
+    return 1
+fi
+
+echo ""
+echo "已设置环境变量："
+echo "  QT_INSTALL_PREFIX=$QT_INSTALL_PREFIX"
+echo "  PACKAGE_NAME_REAL=$PACKAGE_NAME_REAL"
+echo "  QTDIR=${QTDIR:-}"
+echo "  qmake=$(command -v qmake 2>/dev/null || true)"
+echo ""
+echo "接下来可执行："
+echo "  pip wheel . --no-build-isolation -w /path/to/wheel-dir"
+echo "  ./build_most_common/build_from_src.sh /path/to/source"
+echo ""
+echo "手动构建结束后可执行以下命令恢复动态环境："
+echo "  unload_env"
+
+unset QT_PKG_CHOICE QT_PACKAGE_NAME QT_EXPECTED_MAJOR QT_PACKAGE_VERSION
+unset QT_PREFIX_DEFAULT QT_PREFIX_INPUT QT_PREFIX_RESOLVED
+unset QT_SRC_ENV_SCRIPT_DIR QT_DYNAMIC_ENV_LOADER
