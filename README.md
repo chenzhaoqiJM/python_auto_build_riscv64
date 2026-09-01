@@ -1,127 +1,132 @@
-# Python whl 自动化构建说明
+# Python Wheel Automated Build Guide
 
-本项目用于在 RISC-V 架构 (riscv64) 的 Bianbu Linux 系统上自动化构建 Python wheel 包，并上传至 Spacemit GitLab PyPI 仓库。
+This project automates building Python wheel packages on Bianbu Linux for the RISC-V (`riscv64`) architecture and uploading them to the Spacemit GitLab PyPI repository.
 
-Spacemit GitLab PyPI 仓库地址：https://git.spacemit.com/groups/archive/-/packages/
+Spacemit GitLab PyPI repository: https://git.spacemit.com/groups/archive/-/packages/
 
-## 目录结构
+## Directory Structure
 
 ```
 python_auto_build/
-├── sys_setup.sh              # 系统环境初始化脚本
-├── env_common.sh             # 通用环境变量配置
-├── common_func.sh            # 通用函数库
-├── build_most_common/        # 高频包构建脚本
-├── build_pypi/               # PyPI 社区包批量构建
-├── build_version/            # 版本更新构建
-├── common_py/                # Python 通用工具和上传脚本
-├── special_care/             # 需要特殊处理的包构建逻辑
-├── dynamic_env/              # 动态环境变量加载
-├── manual_build/             # 手动触发的构建脚本
-├── test_scripts/             # 测试脚本
-├── others_scripts/           # 其他辅助脚本
-└── bin/                      # 可执行工具
+├── sys_setup.sh              # System environment initialization script
+├── env_common.sh             # Common environment variable configuration
+├── common_func.sh            # Common function library
+├── build_most_common/        # Build scripts for frequently used packages
+├── build_pypi/               # Batch builds for community PyPI packages
+├── build_version/            # Builds for package version updates
+├── common_py/                # Common Python utilities and upload scripts
+├── special_care/             # Build logic for packages requiring special handling
+├── dynamic_env/              # Dynamic environment variable loading
+├── manual_build/             # Manually triggered build scripts
+├── test_scripts/             # Test scripts
+├── others_scripts/           # Other helper scripts
+└── bin/                      # Executable tools
 ```
 
-## 环境设置
+## Environment Setup
 
-### 支持的系统版本
+### Supported System Versions
 
-| glibc 版本 | 系统版本 | 平台标签 |
-|-----------|---------|---------|
+| glibc Version | System Version | Platform Tag |
+|---------------|----------------|--------------|
 | 2.39 | Bianbu Desktop v2.2 (Ubuntu 24.04) | manylinux_2_39_riscv64 |
 | 2.41 | Bianbu Desktop v3.x | manylinux_2_41_riscv64 |
-| 2.42 | Bianbu Desktop v2.6-pre | manylinux_2_42_riscv64 |
+| 2.43 | Bianbu Desktop v4.x | manylinux_2_43_riscv64 |
 
-**基础系统**: Bianbu Desktop v2.2 https://nexus.bianbu.xyz/repository/image/k1/version/bianbu/v2.2/bianbu-24.04-desktop-k1-v2.2-20250430190125.zip
+**Base system**: Bianbu Desktop v2.2 https://nexus.bianbu.xyz/repository/image/k1/version/bianbu/v2.2/bianbu-24.04-desktop-k1-v2.2-20250430190125.zip
 
-上游为 Ubuntu 24.04，使用 GCC 14 以更好地支持 RVV (RISC-V Vector Extension)。
+The upstream distribution is Ubuntu 24.04. GCC 14 is used for improved RVV (RISC-V Vector Extension) support.
 
-python3.12的包建议先在bianbu 2.x上构建，以避免glibc兼容性问题。
+Packages for Python 3.12 should preferably be built on Bianbu 2.x to avoid glibc compatibility issues.
 
-### 初始化
+### Initialization
 
-sudo 免密
+Configure passwordless `sudo`:
 
 ```
 echo "$USER ALL=(ALL) NOPASSWD:ALL" | sudo tee /etc/sudoers.d/nopasswd_$USER
 ```
 
-执行系统环境初始化脚本：
+Run the system environment initialization script:
 
 ```bash
 ./sys_setup.sh
 ```
 
-此脚本将自动完成：
-- 安装构建依赖 (包括 Python、编译工具链、各类开发库等)
-- 配置 GCC 14 (如版本不满足会自动安装并切换)
-- 配置 pip 和 uv 包管理器的国内镜像源
-- 设置 `.pypirc` 用于包上传
-- 下载预编译的第三方库 (Qt5、Arrow、FFmpeg、MuJoCo、CycloneDDS 等)
-- 安装 Rust 工具链
+This script automatically:
 
-### 支持的 Python 版本
+- Installs build dependencies, including Python, compilation toolchains, and development libraries
+- Configures GCC 14, installing and switching to it automatically if the current version does not meet the requirement
+- Configures domestic mirrors for the pip and uv package managers
+- Configures `.pypirc` for package uploads
+- Downloads prebuilt third-party libraries, including Qt5, Arrow, FFmpeg, MuJoCo, and CycloneDDS
+- Installs the Rust toolchain
 
-构建前需要设置目标 Python 版本：
+### Supported Python Versions
+
+Set the target Python version before building:
 
 ```bash
-export BUILD_FOR_VERSION=3.12  # 支持: 3.9, 3.10, 3.11, 3.12, 3.13, 3.13t, 3.14, 3.14t
+export BUILD_FOR_VERSION=3.12  # Supported: 3.9, 3.10, 3.11, 3.12, 3.13, 3.13t, 3.14, 3.14t
 ```
 
-> **注意**: `3.13t` 和 `3.14t` 为 free-threading (无 GIL) 版本。
+> **Note**: `3.13t` and `3.14t` are free-threaded (no-GIL) builds.
 
 ---
 
-## 构建模块
+## Build Modules
 
-### build_most_common - 高频包构建
+### build_most_common - Frequently Used Packages
 
-用于构建使用频率最高的 Python 包，包含 numpy、scipy、opencv-python、pandas 等核心包。
+Builds the most frequently used Python packages, including core packages such as NumPy, SciPy, opencv-python, and pandas.
 
-**包列表**: `hp_pkgs.txt`
+**Package list**: `hp_pkgs.txt`
 
-**构建单个包**:
+**Build a single package**:
+
 ```bash
 ./build_one.sh numpy
 ```
 
-**依次构建多个 Python 版本**:
+**Build for multiple Python versions sequentially**:
+
 ```bash
 BUILD_FOR_VERSION="3.9 3.10 3.11" ./build_one.sh numpy scipy
-# 或使用逗号分隔
+# Alternatively, use comma-separated versions
 BUILD_FOR_VERSIONS="3.12,3.13,3.14" ./build_one.sh numpy scipy
 ```
 
-版本会按传入顺序逐个构建。每个版本使用独立的虚拟环境、缓存和失败日志；某个版本失败后会继续构建后续版本，全部完成后以失败状态退出。
+Versions are built one by one in the specified order. Each version uses an independent virtual environment, cache, and failure log. If a version fails, the remaining versions are still built; after all builds finish, the command exits with a failure status if any build failed.
 
-**从源码目录构建** (适合修改源码后的构建):
+**Build from a source directory** (suitable after modifying the source code):
+
 ```bash
 ./build_from_src.sh /path/to/source/cmake-4.1.0
 ```
 
-**批量构建所有高频包** (使用 uv):
+**Build all frequently used packages in a batch** (using uv):
+
 ```bash
 ./02hp_build_uv.sh
 ```
 
 ---
 
-### build_pypi - PyPI 社区包批量构建
+### build_pypi - Batch Builds for Community PyPI Packages
 
-#### 官方 PyPI Top 包构建
+#### Official Top PyPI Package Builds
 
-基于 [Top PyPI Packages](https://hugovk.github.io/top-pypi-packages/) 排行榜，逐个构建社区活跃包。
+Builds active community packages one by one based on the [Top PyPI Packages](https://hugovk.github.io/top-pypi-packages/) ranking.
 
-**包列表**: `top_pypi_package_names.txt`
+**Package list**: `top_pypi_package_names.txt`
 
 ```bash
 ./02official_pypi_build_uv.sh
 ```
 
-#### Spacemit PyPI 源已有包更新
+#### Updates for Packages Already Available on Spacemit PyPI
 
-保持 Spacemit PyPI 源中已有包的版本最新。
+Keeps packages already available on the Spacemit PyPI index up to date.
 
 ```bash
 ./02spacemit_pypi_build_uv.sh
@@ -129,52 +134,56 @@ BUILD_FOR_VERSIONS="3.12,3.13,3.14" ./build_one.sh numpy scipy
 
 ---
 
-### build_version - 版本更新构建
+### build_version - Package Version Builds
 
-用于完善 https://git.spacemit.com/api/v4/projects/33/packages/pypi/simple 里 Python 包的相应python版本周期下的所有版本。
+Builds all relevant releases in each supported Python version cycle for packages listed at https://git.spacemit.com/api/v4/projects/33/packages/pypi/simple.
 
-**批量更新所有包版本**:
+**Update all package versions in a batch**:
+
 ```bash
 ./01version_build_uv.sh
 ```
 
-**跳过包列表**: `skip_pkgs.txt` (记录需要跳过的包)
+**Skip list**: `skip_pkgs.txt` (records packages that should be skipped)
 
-**构建指定包的近期版本**:
+**Build recent versions of specified packages**:
+
 ```bash
 ./02single_build_uv.sh opencv-python opencv-contrib-python
 ```
 
 ---
 
-### special_care - 特殊包构建
+### special_care - Special Package Builds
 
-定义了需要打 patch 或特殊处理的包构建流程。
+Defines build workflows for packages that require patches or other special handling.
 
-**入口**: `special_builder.py`
+**Entry point**: `special_builder.py`
 
-**当前支持的特殊处理包**:
+**Packages currently receiving special handling**:
+
 - `opencv-python`, `opencv-contrib-python`, `opencv-python-headless`, `opencv-contrib-python-headless`
 - `numpy`, `matplotlib`, `onnx`
 - `lintrunner`, `mmcif`, `glfw`
 - `pyqt5`, `pyqt6`
 - `curl-cffi`
 
-**单独构建逻辑**: 每个特殊包在 `build_xxx.py` 文件中定义。
+**Package-specific build logic**: Each specially handled package is defined in a `build_xxx.py` file.
 
 ---
 
-### dynamic_env - 动态环境加载
+### dynamic_env - Dynamic Environment Loading
 
-根据不同包名动态加载所需的环境变量。
+Dynamically loads the environment variables required by each package.
 
-**入口脚本**: `env_loader.sh`
+**Entry-point script**: `env_loader.sh`
 
-**支持的环境模块**:
+**Supported environment modules**:
+
 - `arrow_env.sh` - Apache Arrow
 - `av_env.sh` - PyAV (FFmpeg)
 - `opencv_env.sh` - OpenCV
-- `qt5_env.sh` / `qt6_env.sh` - Qt 相关
+- `qt5_env.sh` / `qt6_env.sh` - Qt-related settings
 - `mujoco_env.sh` - MuJoCo
 - `cyclonedds_env.sh` - CycloneDDS
 - `llvmlite_env.sh` - llvmlite
@@ -183,77 +192,78 @@ BUILD_FOR_VERSIONS="3.12,3.13,3.14" ./build_one.sh numpy scipy
 - `pemja_env.sh` - PemJa
 - `pynacl.sh` - PyNaCl
 
-**使用方式**:
+**Usage**:
+
 ```bash
 source dynamic_env/env_loader.sh <package_name>
-load_env      # 加载环境
-# ... 构建操作 ...
-unload_env    # 卸载环境
+load_env      # Load the environment
+# ... build operations ...
+unload_env    # Unload the environment
 ```
 
 ---
 
-### common_py - 通用 Python 工具
+### common_py - Common Python Utilities
 
-记录了修复脚本和打包上传脚本。
+Contains wheel repair, packaging, and upload scripts.
 
-| 文件 | 功能 |
-|-----|-----|
-| `00upload_with_repair.py` | whl 包后处理和上传 |
-| `01upload_with_repair_src.py` | 从源码构建后上传 |
-| `check_whl.py` | 检查 whl 包有效性 |
-| `download_whl_sdist.py` | 下载 whl 或 sdist |
-| `upload_from_dir.py` | 从目录批量上传 |
+| File | Function |
+|------|----------|
+| `00upload_with_repair.py` | Post-processes and uploads wheel packages |
+| `01upload_with_repair_src.py` | Uploads packages after building from source |
+| `check_whl.py` | Validates wheel packages |
+| `download_whl_sdist.py` | Downloads wheels or source distributions |
+| `upload_from_dir.py` | Uploads packages from a directory in a batch |
 
-**fix_whl 子目录**:
-| 文件 | 功能 |
-|-----|-----|
-| `fix_whl_rpath.py` | 修复 `.libs` 文件夹下动态库的 rpath |
-| `fix_whl_name.py` | 修复 whl 包名 |
-| `fix_rpath_common.py` | 通用 rpath 修复函数 |
-| `fix_z_qt5.py` / `fix_z_qt6.py` | Qt5/Qt6 特殊修复 |
+**`fix_whl` subdirectory**:
 
----
-
-### manual_build - 手动构建
-
-手动触发的构建脚本，需要进行一些额外设置。
-
-| 脚本 | 功能 |
-|-----|-----|
-| `01stag-python.sh` | Stag Python 构建（已迁移到 `special_care/build_stag_python.py`，可由 `build_most_common/build_one.sh stag-python` 触发） |
-| `02onnxruntime.sh` | ONNX Runtime 构建 |
-| `04pytorch.sh` | PyTorch 构建 |
-| `04torchvision.sh` | TorchVision 构建 |
-| `04torchaudio.sh` | TorchAudio 构建 |
-| `04torch_upload.py` | PyTorch 系列上传 |
+| File | Function |
+|------|----------|
+| `fix_whl_rpath.py` | Repairs the rpath of shared libraries under the `.libs` directory |
+| `fix_whl_name.py` | Repairs wheel package names |
+| `fix_rpath_common.py` | Common rpath repair functions |
+| `fix_z_qt5.py` / `fix_z_qt6.py` | Qt5/Qt6-specific repairs |
 
 ---
 
+### manual_build - Manual Builds
 
-## 关键环境变量
+Manually triggered build scripts that require additional setup.
 
-| 变量 | 说明 |
-|-----|-----|
-| `BUILD_FOR_VERSION` | 目标 Python 版本 (3.9/3.10/3.11/3.12/3.13/3.13t/3.14/3.14t) |
-| `AUDITWHEEL_PLAT_DEF` | auditwheel 平台标签 (自动检测) |
-| `FROM_SOURCE_FLAG` | 是否强制从源码构建 (0/1) |
-| `UV_INDEX_URL` | uv 主索引源 |
-| `UV_EXTRA_INDEX_URL` | uv 额外索引源 (Spacemit PyPI) |
-
----
-
-## PyPI 上传配置
-
-上传目标: https://git.spacemit.com/api/v4/projects/33/packages/pypi
-
-配置文件 `~/.pypirc` 由 `sys_setup.sh` 自动生成，内容来自 `pypirc.txt`。
+| Script | Function |
+|--------|----------|
+| `01stag-python.sh` | Builds Stag Python (migrated to `special_care/build_stag_python.py`; it can be triggered with `build_most_common/build_one.sh stag-python`) |
+| `02onnxruntime.sh` | Builds ONNX Runtime |
+| `04pytorch.sh` | Builds PyTorch |
+| `04torchvision.sh` | Builds TorchVision |
+| `04torchaudio.sh` | Builds TorchAudio |
+| `04torch_upload.py` | Uploads the PyTorch package family |
 
 ---
 
-## 第三方预编译库
+## Key Environment Variables
 
-以下库将在 `sys_setup.sh` 执行时自动下载到 `/opt/ext/`:
+| Variable | Description |
+|----------|-------------|
+| `BUILD_FOR_VERSION` | Target Python version (3.9/3.10/3.11/3.12/3.13/3.13t/3.14/3.14t) |
+| `AUDITWHEEL_PLAT_DEF` | auditwheel platform tag (detected automatically) |
+| `FROM_SOURCE_FLAG` | Whether to force a source build (0/1) |
+| `UV_INDEX_URL` | Primary uv package index |
+| `UV_EXTRA_INDEX_URL` | Additional uv package index (Spacemit PyPI) |
+
+---
+
+## PyPI Upload Configuration
+
+Upload destination: https://git.spacemit.com/api/v4/projects/33/packages/pypi
+
+The `~/.pypirc` configuration file is generated automatically by `sys_setup.sh` using the contents of `pypirc.txt`.
+
+---
+
+## Prebuilt Third-Party Libraries
+
+The following libraries are downloaded automatically to `/opt/ext/` when `sys_setup.sh` runs:
 
 - **Qt5**: `/opt/Qt5.15.16`
 - **Apache Arrow**: `/opt/ext/arrow/`
@@ -261,4 +271,4 @@ unload_env    # 卸载环境
 - **MuJoCo**: `/opt/ext/mujoco/`
 - **CycloneDDS**: `/opt/ext/cyclonedds/`
 
-下载源: `https://archive.spacemit.com/ros2/prebuilt_libs/`
+Download source: `https://archive.spacemit.com/ros2/prebuilt_libs/`
