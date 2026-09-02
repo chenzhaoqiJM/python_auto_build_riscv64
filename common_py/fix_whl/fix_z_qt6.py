@@ -42,7 +42,7 @@ def postprocess_whl_rpath_qt6(whl_path, skip_tag=["none", "cmake"]):
 
         # qt root
         qt6_dir=unpacked_dir/'PyQt6'
-        # set qt6 rpath to 
+        # set qt6 rpath to
         print(f"$$$$-set dir {str(qt6_dir)} all *.so rpath to $ORIGIN/Qt6/lib")
         patch_rpath_all(root=qt6_dir, new_rpath=r"$ORIGIN/Qt6/lib")
 
@@ -54,7 +54,7 @@ def postprocess_whl_rpath_qt6(whl_path, skip_tag=["none", "cmake"]):
         subprocess.run(["cp", "-ra", str(qt_install_prefix), str(qt6_lib_dir)], check=True)
         subprocess.run(["rm", "-rf", str(qt6_lib_dir/'bin')], check=True)
         subprocess.run(["rm", "-rf", str(qt6_lib_dir/'include')], check=True)
-        
+
 
         # 使用 wheel.pack 重新打包 ----------------------------------
         subprocess.run(["wheel", "pack", str(unpacked_dir), "-d", str(whl_path.parent)], check=True)
@@ -68,12 +68,13 @@ def postprocess_whl_rpath_qt6(whl_path, skip_tag=["none", "cmake"]):
         print(f"fix whl to ... {str(WHEELS_REPAIR_DIR)}")
 
         cmd = [
-            "auditwheel", "repair", str(whl_path), "-w", str(WHEELS_REPAIR_DIR), 
+            "auditwheel", "repair", str(whl_path), "-w", str(WHEELS_REPAIR_DIR),
         ]
 
         exclude_libs = ['libglib*.so.*', 'libgobject*.so.*', 'libgio*.so.*', 'libX11*.so.*', 'libGLX*.so.*',
                         'libGL*.so.*', 'libGLdispatch*.so.*', 'libxcb*.so.*', 'libXau*.so.*', 'libqwayland*.so.*',
-                        'libXdmcp*.so.*', 'libX*.so*', 'libgdk*.so*', 'libgio*.so*', 'libgmodule*.so*', 'libgtk*.so*', 'libwayland*.so.*']
+                        'libXdmcp*.so.*', 'libX*.so*', 'libgdk*.so*', 'libgio*.so*', 'libgmodule*.so*', 'libgtk*.so*', 'libwayland*.so.*',
+                        'libshiboken*.so.*', 'libQt*.so*']
         for lib in exclude_libs:
             cmd += ["--exclude", lib]
 
@@ -91,7 +92,7 @@ def postprocess_whl_rpath_qt6(whl_path, skip_tag=["none", "cmake"]):
 
         print("start to fix .libs rpath.............................")
         if new_files:
-            
+
             with tempfile.TemporaryDirectory() as tmpdir_str:
                 tmpdir = Path(tmpdir_str)
 
@@ -116,7 +117,7 @@ def postprocess_whl_rpath_qt6(whl_path, skip_tag=["none", "cmake"]):
                 subprocess.run(["wheel", "pack", str(unpacked_dir), "-d", str(repaired_whl.parent)], check=True)
 
                 print(f"[✅] Full repair Original wheel overwritten: {repaired_whl}")
-                
+
             return repaired_whl
         else:
             print("No repaired .whl file found")
