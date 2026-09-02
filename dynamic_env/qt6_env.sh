@@ -40,6 +40,9 @@ if [[ "$1" == "activate" ]]; then
     export _pyqt6_ENV_OLD_QTDIR="${QTDIR-}"
     export QTDIR="$pyqt6_INSTALL_PREFIX"
 
+    export _pyqt6_ENV_OLD_LLVM_INSTALL_DIR="${LLVM_INSTALL_DIR-}"
+    export LLVM_INSTALL_DIR="/usr/lib/llvm-18"
+
     echo "[pyqt6Env] PATH is: $PATH"
 
     # 方法1: 推荐使用 command -v
@@ -75,6 +78,15 @@ elif [[ "$1" == "deactivate" ]]; then
             unset QTDIR
         fi
         unset _pyqt6_ENV_OLD_QTDIR
+    fi
+
+    if [[ -n "${_pyqt6_ENV_OLD_LLVM_INSTALL_DIR+x}" ]]; then
+        if [[ -n "$_pyqt6_ENV_OLD_LLVM_INSTALL_DIR" ]]; then
+            export LLVM_INSTALL_DIR="$_pyqt6_ENV_OLD_LLVM_INSTALL_DIR"
+        else
+            unset LLVM_INSTALL_DIR
+        fi
+        unset _pyqt6_ENV_OLD_LLVM_INSTALL_DIR
     fi
     
     _pyqt6_ENV_ACTIVE=0

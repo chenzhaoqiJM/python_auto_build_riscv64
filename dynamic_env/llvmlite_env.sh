@@ -16,7 +16,7 @@ _get_llvm_version_by_pkg() {
         "llvmlite==0.45.1"|"llvmlite==0.45.0"|"llvmlite==0.46.0")
             echo "20" ;;
         *)
-            echo "19" ;;
+            echo "18" ;;
     esac
 }
 
@@ -75,8 +75,8 @@ elif [[ "$1" == "deactivate" ]]; then
     fi
 
     # default
-    export LLVM_CONFIG=/usr/bin/llvm-config-19
-    export LLVM_DIR=/usr/lib/llvm-19/cmake
+    export LLVM_CONFIG=/usr/bin/llvm-config-18
+    export LLVM_DIR=/usr/lib/llvm-18/cmake
 
     unset LLVMLITE_SKIP_LLVM_VERSION_CHECK
     unset CC

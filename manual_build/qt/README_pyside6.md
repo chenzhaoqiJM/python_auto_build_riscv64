@@ -128,7 +128,8 @@ auditwheel repair ./pyside6-6.11.2-cp312-abi3-linux_riscv64.whl --no-update-tags
   --exclude 'libgmodule*.so*' \
   --exclude 'libgtk*.so*' \
   --exclude 'libwayland*.so.*' \
-  --exclude 'libshiboken*.so.*'
+  --exclude 'libshiboken*.so.*' \
+  --exclude 'libQt*.so*'
 ```
 
 动态库修复
