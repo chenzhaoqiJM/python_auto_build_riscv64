@@ -107,5 +107,103 @@ vim WHEEL
 wheel pack pyside6-6.11.2 -d .
 ```
 
+动态库打包
+
+```bash
+auditwheel repair ./pyside6-6.11.2-cp312-abi3-linux_riscv64.whl --no-update-tags \
+  --exclude 'libglib*.so.*' \
+  --exclude 'libgobject*.so.*' \
+  --exclude 'libgio*.so.*' \
+  --exclude 'libX11*.so.*' \
+  --exclude 'libGLX*.so.*' \
+  --exclude 'libGL*.so.*' \
+  --exclude 'libGLdispatch*.so.*' \
+  --exclude 'libxcb*.so.*' \
+  --exclude 'libXau*.so.*' \
+  --exclude 'libqwayland*.so.*' \
+  --exclude 'libXdmcp*.so.*' \
+  --exclude 'libX*.so*' \
+  --exclude 'libgdk*.so*' \
+  --exclude 'libgio*.so*' \
+  --exclude 'libgmodule*.so*' \
+  --exclude 'libgtk*.so*' \
+  --exclude 'libwayland*.so.*' \
+  --exclude 'libshiboken*.so.*'
+```
+
 动态库修复
 
+```bash
+cd wheelhouse
+python ~/python_auto_build_riscv64/common_py/fix_whl/fix_whl_rpath.py ./pyside6-6.11.2-cp312-abi3-linux_riscv64.whl
+```
+
+上传
+
+```bash
+twine upload -r gitlab ./pyside6-6.11.2-cp312-abi3-linux_riscv64.whl
+```
+
+## 处理 shiboken6
+
+解包原始 whl
+
+```bash
+wheel unpack ./shiboken6-6.11.2-6.11.2-cp312-cp312-linux_riscv64.whl -d unpack_shiboken6
+```
+
+```bash
+cd unpack_shiboken6/shiboken6-6.11.2/shiboken6-6.11.2.dist-info
+
+vim WHEEL
+
+#修改 Tag: cp312-abi3-linux_riscv64
+```
+
+重新打包
+
+```bash
+wheel pack shiboken6-6.11.2 -d .
+```
+
+上传
+
+```bash
+twine upload -r gitlab ./shiboken6-6.11.2-cp312-abi3-linux_riscv64.whl
+```
+
+## 处理 shiboken6_generator
+
+```bash
+wheel unpack ./shiboken6_generator-6.11.2-6.11.2-cp312-cp312-linux_riscv64.whl -d unpack_shiboken6_generator
+```
+
+```bash
+cd unpack_shiboken6_generator/shiboken6_generator-6.11.2/shiboken6_generator-6.11.2.dist-info
+
+vim WHEEL
+
+#修改 Tag: cp312-abi3-linux_riscv64
+```
+
+重新打包
+
+```bash
+wheel pack shiboken6_generator-6.11.2 -d .
+```
+
+修复
+
+```bash
+auditwheel repair ./shiboken6_generator-6.11.2-cp312-abi3-linux_riscv64.whl --no-update-tags
+
+cd wheelhouse
+
+python ~/python_auto_build_riscv64/common_py/fix_whl/fix_whl_rpath.py ./shiboken6_generator-6.11.2-cp312-abi3-linux_riscv64.whl
+```
+
+上传修复后包
+
+```bash
+twine upload -r gitlab ./shiboken6_generator-6.11.2-cp312-abi3-linux_riscv64.whl
+```
