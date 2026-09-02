@@ -6,7 +6,11 @@ from pathlib import Path
 from datetime import datetime
 import shutil
 
-from ../fix_whl.fix_whl_rpath import process_whl_rpath
+current_dir = os.path.dirname(os.path.abspath(__file__))
+parent_dir = os.path.dirname(current_dir)
+sys.path.insert(0, parent_dir)
+
+from fix_whl.fix_whl_rpath import process_whl_rpath
 
 # 配置跳过打包的依赖库, 字符串，支持通配符*,例如：['libX11*.so.*', 'libxcb*.so.*']
 exclude_libs = []
