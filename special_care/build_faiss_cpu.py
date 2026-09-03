@@ -1,27 +1,41 @@
 #!/usr/bin/env python3
 
-import sys
-import subprocess
 import os
-import tempfile
+import platform
+import re
 import shutil
+import subprocess
+import sys
+import tempfile
 from pathlib import Path
 
 from tools import parse_package_spec
 from registry import register
 
 
-def get_git_repo_dir() -> Path:
-    """获取 faiss-wheels git 仓库存储目录"""
+LEGACY_REPO_URL = "https://github.com/faiss-wheels/faiss-wheels.git"
+UPSTREAM_REPO_URL = "https://github.com/facebookresearch/faiss.git"
+UPSTREAM_WHEEL_VERSION = (1, 14, 2)
+
+
+def uses_upstream_repo(version: str) -> bool:
+    """从 1.14.2 开始，wheel 构建配置由 Faiss 上游仓库维护。"""
+    normalized_version = version.removeprefix("v")
+    match = re.match(r"^(\d+)\.(\d+)\.(\d+)", normalized_version)
+    if not match:
+        raise ValueError(f"❌ 无法解析 faiss-cpu 版本号: {version}")
+    return tuple(int(part) for part in match.groups()) >= UPSTREAM_WHEEL_VERSION
+
+
+def get_git_repo_dir(repo_name: str) -> Path:
+    """获取指定 git 仓库的缓存目录。"""
     home = Path.home()
     build_for_version = os.environ.get("BUILD_FOR_VERSION", "default")
-    return home / f".pip_git_hp_{build_for_version}" / "faiss-wheels"
+    return home / f".pip_git_hp_{build_for_version}" / repo_name
 
 
-def clone_or_update_repo(git_dir: Path):
-    """克隆或更新 faiss-wheels 仓库"""
-    repo_url = "https://github.com/faiss-wheels/faiss-wheels.git"
-
+def clone_or_update_repo(git_dir: Path, repo_url: str):
+    """克隆或更新构建源码仓库。"""
     if git_dir.exists():
         print(f"📂 仓库已存在: {git_dir}")
         print("🔄 更新仓库...")
@@ -92,13 +106,20 @@ def patch_pyproject_project_name(source_dir: Path, package_name: str):
     print(f"✅ 已更新 pyproject.toml 项目名为 {package_name}")
 
 
-def build_wheel(source_dir: Path, wheel_dir: str):
+def build_wheel(source_dir: Path, wheel_dir: str, use_upstream: bool):
     """构建 wheel"""
     print(f"🔨 在 {source_dir} 中构建 wheel")
     env = os.environ.copy()
     env.setdefault("FAISS_GPU_SUPPORT", "OFF")
+    command = ["pip", "wheel", "--verbose"]
+    if use_upstream and platform.machine() == "riscv64":
+        print("ℹ️ riscv64 上禁用 LTO，避免 RVV 对象链接失败")
+        command.extend(
+            ["--config-settings", "cmake.define.FAISS_USE_LTO=OFF"]
+        )
+    command.extend([".", "-w", wheel_dir])
     subprocess.run(
-        ["pip", "wheel", "--verbose", ".", "-w", wheel_dir],
+        command,
         check=True,
         cwd=source_dir,
         env=env,
@@ -115,19 +136,24 @@ def build_faiss_cpu_func(package_spec: str, wheel_dir: str):
 
     print(f"📦 开始构建 {pkg_name} {version}")
 
-    git_dir = get_git_repo_dir()
-    clone_or_update_repo(git_dir)
+    use_upstream = uses_upstream_repo(version)
+    repo_name = "faiss" if use_upstream else "faiss-wheels"
+    repo_url = UPSTREAM_REPO_URL if use_upstream else LEGACY_REPO_URL
+    print(f"📚 使用源码仓库: {repo_url}")
+
+    git_dir = get_git_repo_dir(repo_name)
+    clone_or_update_repo(git_dir, repo_url)
     tag = find_matching_tag(git_dir, version)
 
     with tempfile.TemporaryDirectory() as tmpdir:
         try:
-            tmp_source = Path(tmpdir) / "faiss-wheels"
+            tmp_source = Path(tmpdir) / repo_name
             print(f"📋 复制源码到临时目录: {tmp_source}")
             shutil.copytree(git_dir, tmp_source, symlinks=True)
 
             checkout_version(tmp_source, tag)
             patch_pyproject_project_name(tmp_source, pkg_name)
-            build_wheel(tmp_source, wheel_dir)
+            build_wheel(tmp_source, wheel_dir, use_upstream)
             print("✅ 构建完成")
 
         except Exception as e:
