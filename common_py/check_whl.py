@@ -58,7 +58,16 @@ def get_current_python_tag():
     minor = sys.version_info.minor
     return f"cp{major}{minor}"
 
-def has_whl_in_gitlab(package_name, version=None, project_id=33, token=None):
+def wheel_matches_platform(filename, platform_tag):
+    """检查 wheel 的 platform 字段是否匹配目标平台；any 适用于所有平台。"""
+    if not filename.endswith(".whl"):
+        return False
+    platforms = filename[:-4].rsplit("-", 1)[-1].split(".")
+    return "any" in platforms or not platform_tag or platform_tag in platforms
+
+
+def has_whl_in_gitlab(package_name, version=None, project_id=33, token=None,
+                      platform_tag=None):
     """
     查询 GitLab 包仓库中是否存在当前 Python 版本可用的 .whl 文件。
     如果 version 为 None，则从 PyPI 获取最新版本号。
@@ -106,20 +115,22 @@ def has_whl_in_gitlab(package_name, version=None, project_id=33, token=None):
             matching_whls = []
             for f in files:
                 fname = f.get("file_name", "")
+                if not wheel_matches_platform(fname, platform_tag):
+                    continue
                 if sys.version_info.minor <= 12:
-                    if fname.endswith(".whl") and (python_tag in fname or 'none' in fname or 'abi3' in fname):
+                    if python_tag in fname or 'none' in fname or 'abi3' in fname:
                         matching_whls.append(fname)
                 else:
                     no_free_thread = sys._is_gil_enabled()
                     python_tag_t = f"{python_tag}t"
                     if no_free_thread:
-                        if fname.endswith(".whl") and ((python_tag in fname and python_tag_t not in fname) or 'none' in fname or 'abi3' in fname):
+                        if (python_tag in fname and python_tag_t not in fname) or 'none' in fname or 'abi3' in fname:
                             matching_whls.append(fname)
                     else:
                         major = sys.version_info.major
                         minor = sys.version_info.minor
                         python_tag_free_t = f"cp{major}{minor}t"
-                        if fname.endswith(".whl") and (python_tag_free_t in fname) or ('none' in fname or 'abi3' in fname):
+                        if python_tag_free_t in fname or 'none' in fname or 'abi3' in fname:
                             matching_whls.append(fname)
 
 

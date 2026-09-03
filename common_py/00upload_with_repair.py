@@ -94,9 +94,9 @@ def try_auditwheel_repair(whl_path: Path) -> Path:
 
     print(f"🛠️  Trying auditwheel repair: {str(whl_path)}")
 
-    # 检查 wheel 名称是否包含跳过关键字
-    if any(keyword in whl_name for keyword in SKIP_KEYWORDS):
-        print(f"⚠️  Skipping auditwheel repair for wheel with skip-tag: {whl_name}")
+    # 平台无关 wheel 无需 repair。
+    if whl_name.endswith("-any.whl"):
+        print(f"ℹ️  Platform-independent wheel, skipping auditwheel repair: {whl_name}")
         fallback_path = WHEELS_REPAIR_DIR / whl_name
         shutil.copy2(whl_path, fallback_path)
         print(f"📋 Copied original wheel to: {fallback_path}")
@@ -105,26 +105,12 @@ def try_auditwheel_repair(whl_path: Path) -> Path:
     try:
         exclude_libs = ['libglib*.so.*', 'libgobject*.so.*', 'libgio*.so.*', 'libgdk*.so*', 'libgmodule*.so*']
 
-        if FROM_SOURCE_FLAG == "1":
-            cmd = [
-                "auditwheel", "repair", str(whl_path), "-w", str(WHEELS_REPAIR_DIR), "--disable-isa-ext-check", "--plat", AUDITWHEEL_PLAT_DEF
-            ]
-        else:
-            if sys.version_info.major == 3 and sys.version_info.minor <= 12:
-                cmd = [
-                    "auditwheel", "repair", str(whl_path), "-w", str(WHEELS_REPAIR_DIR), "--disable-isa-ext-check",
-                ]
-            else:
-                cmd = [
-                    "auditwheel", "repair", str(whl_path), "-w", str(WHEELS_REPAIR_DIR), "--disable-isa-ext-check", "--plat", AUDITWHEEL_PLAT_DEF
-                ]
-
-        # 检查 Python 版本并决定是否添加 --no-update-tags
-        if sys.version_info.major == 3 and sys.version_info.minor <= 12 and FROM_SOURCE_FLAG != "1":
-            print(f"🔧 Detected Python {sys.version_info.major}.{sys.version_info.minor} <= 3.12, adding --no-update-tags")
-            cmd.append("--no-update-tags")
-        else:
-            print(f"ℹ️  Detected Python {sys.version_info.major}.{sys.version_info.minor} > 3.12, not adding --no-update-tags")
+        if not AUDITWHEEL_PLAT_DEF:
+            raise RuntimeError("AUDITWHEEL_PLAT_DEF is not set")
+        cmd = [
+            "auditwheel", "repair", str(whl_path), "-w", str(WHEELS_REPAIR_DIR),
+            "--disable-isa-ext-check", "--plat", AUDITWHEEL_PLAT_DEF,
+        ]
 
         for lib in exclude_libs:
             cmd += ["--exclude", lib]
@@ -140,6 +126,11 @@ def try_auditwheel_repair(whl_path: Path) -> Path:
 
         if new_files:
             repaired_whl = new_files[0]
+            if AUDITWHEEL_PLAT_DEF not in repaired_whl.name:
+                raise RuntimeError(
+                    f"repaired wheel does not contain target platform tag "
+                    f"{AUDITWHEEL_PLAT_DEF}: {repaired_whl.name}"
+                )
             print(f"✅ auditwheel repair succeeded: {repaired_whl.name}")
             return repaired_whl
         else:
@@ -147,10 +138,7 @@ def try_auditwheel_repair(whl_path: Path) -> Path:
 
     except Exception as e:
         print(f"❌ auditwheel repair failed: {e}")
-        fallback_path = WHEELS_REPAIR_DIR / whl_path.name
-        shutil.copy2(whl_path, fallback_path)
-        print(f"📋 Copied original wheel to: {fallback_path}")
-        return fallback_path
+        raise
 
 def is_gitlab_project_81_pypirc() -> bool:
     pypirc_path = Path(os.path.expanduser("~/.pypirc"))
@@ -204,6 +192,7 @@ def main():
         print("ℹ️ No target package specified; cache cleanup only")
         return 0
 
+    failed = False
     for whl in whl_files:
         try:
             # 打包动态库
@@ -222,13 +211,16 @@ def main():
             upload_whl(Path(final_whl3))
             # shutil.copy2(final_whl3, '/home/zqpi/')
         except subprocess.TimeoutExpired:
+            failed = True
             print(f"⏰ Upload timed out after {UPLOAD_TIMEOUT_SECONDS}s for {whl.name}")
         except subprocess.CalledProcessError:
+            failed = True
             print(f"⚠️  Upload failed for {whl.name}")
         except Exception as e:
+            failed = True
             print(f"⚠️  Unexpected error for {whl.name}: {e}")
     clean_dirs()
-    return 0
+    return 1 if failed else 0
 
 if __name__ == "__main__":
     sys.exit(main())

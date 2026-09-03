@@ -45,6 +45,10 @@ def main():
         if FROM_SOURCE_FLAG == "1":
             pass
         else:
+            found, filenames = has_whl_in_gitlab_with_retry(package)
+            if found:
+                print(f"✅ Already exists for target platform: {filenames}")
+                sys.exit(101)
             sys.exit(100)  # 告诉 Bash 脚本：不处理这个包
 
     try:
@@ -66,7 +70,7 @@ def main():
             for file in filenames:
                 if AUDITWHEEL_PLAT_DEF in str(file) or 'none' in str(file):
                     print(f"✅ Aready exist {file}")
-                    sys.exit(0)
+                    sys.exit(101)
 
             if name in SPECIAL_PACKAGES:
                 SPECIAL_PACKAGES[name](package, wheel_dir)
@@ -104,17 +108,17 @@ def main():
                 if abi3_whl_exist:
                     if only_need_abi3:
                         print(f"✅ Aready exist abi3 whl for {filenames}")
-                        sys.exit(0)
+                        sys.exit(101)
                     else:
                         if len(filenames) >= 2:
                             print(f"✅ Aready exist {filenames}")
-                            sys.exit(0)
+                            sys.exit(101)
                         else:
                             if change_to_abi_flag:
                                 print(f"仅仅检测到 {filenames}， 不跳过构建")
                             else:
                                 print(f"✅ Aready exist {filenames}")
-                                sys.exit(0)
+                                sys.exit(101)
 
                 else:
                     if only_need_abi3:
@@ -122,7 +126,7 @@ def main():
                         pass
                     else:
                         print(f"✅ Aready exist {filenames}")
-                        sys.exit(0)
+                        sys.exit(101)
             else:
                 print("没有找到可用的 whl 包，执行构建.................")
 

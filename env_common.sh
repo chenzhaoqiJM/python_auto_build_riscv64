@@ -16,7 +16,7 @@ GLIBC_VER=$(getconf GNU_LIBC_VERSION | awk '{print $2}')
 GLIBC_MAJ=$(echo $GLIBC_VER | cut -d. -f1)
 GLIBC_MIN=$(echo $GLIBC_VER | cut -d. -f2)
 
-export AUDITWHEEL_PLAT_DEF="manylinux_${GLIBC_MAJ}_${GLIBC_MIN}_${ARCH}"
+export AUDITWHEEL_PLAT_DEF="${AUDITWHEEL_PLAT_DEF:-manylinux_${GLIBC_MAJ}_${GLIBC_MIN}_${ARCH}}"
 
 export HNSWLIB_NO_NATIVE=1
 export CMAKE_POLICY_VERSION_MINIMUM=3.5
@@ -41,4 +41,3 @@ export LD_LIBRARY_PATH=/opt/lib:$LD_LIBRARY_PATH
 
 export UV_INDEX_URL=https://mirrors.aliyun.com/pypi/simple
 export UV_EXTRA_INDEX_URL=https://git.spacemit.com/api/v4/projects/33/packages/pypi/simple
-

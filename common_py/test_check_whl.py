@@ -18,6 +18,22 @@ def import_check_whl_with_home(home_dir):
 
 
 class CheckWhlConfigTests(unittest.TestCase):
+    def test_wheel_matches_requested_platform(self):
+        with tempfile.TemporaryDirectory() as tmp_home:
+            module = import_check_whl_with_home(tmp_home)
+
+        self.assertTrue(module.wheel_matches_platform(
+            "demo-1.0-cp312-cp312-manylinux_2_39_riscv64.whl",
+            "manylinux_2_39_riscv64",
+        ))
+        self.assertFalse(module.wheel_matches_platform(
+            "demo-1.0-cp312-cp312-manylinux_2_36_riscv64.whl",
+            "manylinux_2_39_riscv64",
+        ))
+        self.assertTrue(module.wheel_matches_platform(
+            "demo-1.0-py3-none-any.whl", "manylinux_2_39_riscv64"
+        ))
+
     def test_import_does_not_require_gitlab_config(self):
         with tempfile.TemporaryDirectory() as tmp_home:
             module = import_check_whl_with_home(tmp_home)

@@ -237,6 +237,8 @@ while true; do
                 if [[ $exit_code -eq 0 ]]; then
                     echo "✅ Special build complete for $PACKAGE_WITH_VERSION"
                     return 0
+                elif [[ $exit_code -eq 101 ]]; then
+                    return 101
                 elif [[ $exit_code -eq 100 ]]; then
                     echo "ℹ️  $PACKAGE_WITH_VERSION not handled specially, fallback to generic build"
                     return 100
@@ -289,6 +291,11 @@ while true; do
 
             if [[ $exit_code -eq 0 ]]; then
                 echo "📦 $PACKAGE_WITH_VERSION handled specially"
+            elif [[ $exit_code -eq 101 ]]; then
+                echo "⏭️  Skipping $PACKAGE_WITH_VERSION (target platform wheel already exists)"
+                set -e
+                unload_env
+                continue
             elif [[ $exit_code -eq 100 ]]; then
                 echo "build_generic_package starting........"
                 build_generic_package
