@@ -28,6 +28,7 @@ VENV_NAME="hp_uv_$BUILD_FOR_VERSION"
 VENV_DIR="$HOME/pyenvs/$VENV_NAME"
 DIST_DIR="$HOME/pyenvs/store"
 WHEEL_CACHE_DIR="$HOME/.mywheels/hp_uv_$BUILD_FOR_VERSION"
+export WHEEL_CACHE_DIR_PY="$WHEEL_CACHE_DIR"
 PACKAGE_LIST="$SCRIPT_DIR/hp_pkgs.txt"
 FAILED_LIST="$SCRIPT_DIR/failed_hp_$BUILD_FOR_VERSION.log"
 
@@ -273,6 +274,7 @@ while true; do
         set -e
         # func select ---------------------------------------------
 
+        export THE_BUILD_PACKAGE_NAME="${PACKAGE_NAME%%==*}"
         run_upload_script "$PACKAGE_NAME" || true
 
         deactivate

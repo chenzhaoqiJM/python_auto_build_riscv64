@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import os
+import re
 import sys
 import subprocess
 from pathlib import Path
@@ -45,6 +46,11 @@ THE_BUILD_PACKAGE_NAME = os.path.expanduser(THE_BUILD_PACKAGE_NAME)
 if THE_BUILD_PACKAGE_NAME != "" and "/" in THE_BUILD_PACKAGE_NAME:
     THE_BUILD_PACKAGE_NAME=THE_BUILD_PACKAGE_NAME.split("/")[-1]
 
+
+def canonicalize_package_name(name: str) -> str:
+    """按 Python 包名规则统一 ``-``、``_`` 和 ``.``。"""
+    return re.sub(r"[-_.]+", "-", name).lower()
+
 def find_built_wheels():
     print("🔍 Searching for built wheels in pip cache...")
     whls_pip = list(PIP_CACHE_DIR.rglob("*.whl"))
@@ -64,9 +70,15 @@ def find_built_wheels():
             FROM_WHEEL_CACHE_FLAG = True
             _tmp_whls = list(WHEEL_CACHE_DIR.rglob("*.whl"))
             _tmp_whls = [w for w in _tmp_whls if w.is_file()]
+            target_name = canonicalize_package_name(
+                THE_BUILD_PACKAGE_NAME.split("==", 1)[0]
+            )
 
             for _whl_file in _tmp_whls:
-                if THE_BUILD_PACKAGE_NAME != "" and THE_BUILD_PACKAGE_NAME in str(_whl_file):
+                wheel_name = canonicalize_package_name(
+                    _whl_file.name.split("-", 1)[0]
+                )
+                if target_name and wheel_name == target_name:
                     whls.append(_whl_file)
                     print(f"✅ find the relevant pkg: {_whl_file}")
                     break
@@ -184,6 +196,14 @@ def main():
     WHEELS_REPAIR_DIR.mkdir(parents=True, exist_ok=True)
 
     whl_files = find_built_wheels()
+    if not whl_files:
+        clean_dirs()
+        if THE_BUILD_PACKAGE_NAME:
+            print(f"❌ No wheel found for package: {THE_BUILD_PACKAGE_NAME}")
+            return 1
+        print("ℹ️ No target package specified; cache cleanup only")
+        return 0
+
     for whl in whl_files:
         try:
             # 打包动态库
@@ -208,6 +228,7 @@ def main():
         except Exception as e:
             print(f"⚠️  Unexpected error for {whl.name}: {e}")
     clean_dirs()
+    return 0
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

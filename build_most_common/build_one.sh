@@ -83,6 +83,7 @@ VENV_NAME="build_one_uv_$BUILD_FOR_VERSION"
 VENV_DIR="$HOME/pyenvs/$VENV_NAME"
 DIST_DIR="$HOME/pyenvs/store"
 WHEEL_CACHE_DIR="$HOME/.mywheels/build_one_uv_$BUILD_FOR_VERSION"
+export WHEEL_CACHE_DIR_PY="$WHEEL_CACHE_DIR"
 UPLOAD_TIMEOUT_SECONDS=${UPLOAD_TIMEOUT_SECONDS:-3600}
 
 mkdir -p "$BUILD_TMPDIR" "$PIP_BUILD_TRACKER_DIR" "$WHEEL_CACHE_DIR" "$DIST_DIR" "$UV_CACHE_DIR" "$XDG_CACHE_HOME"
@@ -284,6 +285,7 @@ for PACKAGE_NAME in "$@"; do
     # func select ---------------------------------------------
 
     echo "📦 上传构建的 wheel"
+    export THE_BUILD_PACKAGE_NAME="${PACKAGE_NAME%%==*}"
     run_upload_script "$PACKAGE_NAME" || true
 
     # 清除环境

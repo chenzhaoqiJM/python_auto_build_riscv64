@@ -136,3 +136,4 @@ docling-parse
 chromadb
 rapidfuzz
 pyarrow
+faiss-cpu
