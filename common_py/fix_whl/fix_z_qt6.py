@@ -18,6 +18,46 @@ sys.path.insert(0, parent_dir)
 
 from fix_rpath_common import fix_so_rpaths_in_lib_dir, get_qt_install_prefix, patch_rpath_all
 
+def make_insert_code(qpa_platform: str) -> str:
+    return f"""# ==== Custom insert start ====
+import os
+current_dir = os.path.dirname(os.path.abspath(__file__))
+current_dir = os.path.abspath(current_dir)
+
+_lib_dir = os.path.join(current_dir, "Qt6/lib/")
+
+os.environ["LD_LIBRARY_PATH"] = f"{{_lib_dir}}:" + os.environ.get("LD_LIBRARY_PATH", "")
+#print(os.environ.get("LD_LIBRARY_PATH", ""))
+
+if "XDG_RUNTIME_DIR" not in os.environ:
+    os.environ["XDG_RUNTIME_DIR"] = "/run/user/1000"
+
+os.environ["QT_QPA_PLATFORM"] = "{qpa_platform}"
+# ==== Custom insert end ====
+"""
+
+def insert_code_into_file(file_path: Path, qpa_platform: str):
+    text = file_path.read_text(encoding="utf-8").splitlines(keepends=True)
+
+    # 找到版权声明后的插入位置（第一个非注释行之前）
+    insert_idx = 0
+    for i, line in enumerate(text):
+        if not line.strip().startswith("#") and line.strip():
+            insert_idx = i
+            break
+    else:
+        insert_idx = len(text)
+
+    # 如果已经插入过，就跳过
+    if any("==== Custom insert start ====" in line for line in text):
+        print(f"{file_path} 已经包含插入代码，跳过。")
+        return
+
+    insert_code = make_insert_code(qpa_platform)
+    new_text = text[:insert_idx] + [insert_code + "\n"] + text[insert_idx:]
+    file_path.write_text("".join(new_text), encoding="utf-8")
+    print(f"已修改 {file_path}, 设置 QT_QPA_PLATFORM={qpa_platform}")
+
 
 def postprocess_whl_rpath_qt6(whl_path, skip_tag=["none", "cmake"]):
 
@@ -54,6 +94,14 @@ def postprocess_whl_rpath_qt6(whl_path, skip_tag=["none", "cmake"]):
         subprocess.run(["cp", "-ra", str(qt_install_prefix), str(qt6_lib_dir)], check=True)
         subprocess.run(["rm", "-rf", str(qt6_lib_dir/'bin')], check=True)
         subprocess.run(["rm", "-rf", str(qt6_lib_dir/'include')], check=True)
+
+        # 修改 init file
+        init_file = qt6_dir / '__init__.py'
+        libqxcb_path = qt6_lib_dir / 'plugins/platforms/libqxcb.so'
+        if os.path.exists(libqxcb_path):
+            insert_code_into_file(init_file, 'xcb')
+        else:
+            insert_code_into_file(init_file, 'wayland')
 
 
         # 使用 wheel.pack 重新打包 ----------------------------------
