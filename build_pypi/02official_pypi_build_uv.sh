@@ -27,6 +27,7 @@ VENV_NAME="tmpbuild_auto_uv_$BUILD_FOR_VERSION"
 VENV_DIR="$HOME/pyenvs/$VENV_NAME"
 DIST_DIR="$HOME/pyenvs/store"
 WHEEL_CACHE_DIR="$HOME/.mywheels/auto_uv_$BUILD_FOR_VERSION"
+export WHEEL_CACHE_DIR_PY="$WHEEL_CACHE_DIR"
 PACKAGE_LIST="$SCRIPT_DIR/top_pypi_package_names.txt"
 FAILED_LIST="$SCRIPT_DIR/failed_$BUILD_FOR_VERSION.log"
 UPLOAD_SCRIPT="$SCRIPT_DIR/../common_py/00upload_with_repair.py"
@@ -290,6 +291,7 @@ while true; do
         # func select ---------------------------------------------
 
         # 调用上传脚本（如果存在）
+        export THE_BUILD_PACKAGE_NAME="${PACKAGE_NAME%%==*}"
         run_upload_script "$PACKAGE_NAME" || true
 
         deactivate || true

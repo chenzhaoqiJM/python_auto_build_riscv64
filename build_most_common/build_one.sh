@@ -78,6 +78,7 @@ export UV_CACHE_DIR="$HOME/.cache/uv_build_one_$BUILD_FOR_VERSION"
 export XDG_CACHE_HOME="$HOME/.cache_build_one_uv_$BUILD_FOR_VERSION"
 export WHEELS_REPAIR_DIR="$HOME/.mywheel_repair/build_one_uv_$BUILD_FOR_VERSION"
 BUILD_TMPDIR="$HOME/.mytmp/build_one_uv_$BUILD_FOR_VERSION"
+export CARGO_HOME="$BUILD_TMPDIR/cargo-home"
 PIP_BUILD_TRACKER_DIR="$BUILD_TMPDIR/pip-build-tracker"
 VENV_NAME="build_one_uv_$BUILD_FOR_VERSION"
 VENV_DIR="$HOME/pyenvs/$VENV_NAME"
@@ -86,7 +87,7 @@ WHEEL_CACHE_DIR="$HOME/.mywheels/build_one_uv_$BUILD_FOR_VERSION"
 export WHEEL_CACHE_DIR_PY="$WHEEL_CACHE_DIR"
 UPLOAD_TIMEOUT_SECONDS=${UPLOAD_TIMEOUT_SECONDS:-3600}
 
-mkdir -p "$BUILD_TMPDIR" "$PIP_BUILD_TRACKER_DIR" "$WHEEL_CACHE_DIR" "$DIST_DIR" "$UV_CACHE_DIR" "$XDG_CACHE_HOME"
+mkdir -p "$BUILD_TMPDIR" "$PIP_BUILD_TRACKER_DIR" "$WHEEL_CACHE_DIR" "$DIST_DIR" "$UV_CACHE_DIR" "$XDG_CACHE_HOME" "$CARGO_HOME"
 
 if ! command -v timeout >/dev/null 2>&1; then
     echo "❌ 'timeout' command not found. Please install coreutils."
@@ -115,6 +116,7 @@ export PIP_BUILD_TRACKER="$PIP_BUILD_TRACKER_DIR"
 export PYTHONPATH="$VENV_DIR/lib/python$BUILD_FOR_VERSION/site-packages"
 
 echo "&&&- set PYTHONPATH to: $PYTHONPATH"
+echo "&&&- set CARGO_HOME to: $CARGO_HOME"
 
 ENV_LOADER_SH="$SCRIPT_DIR/../dynamic_env/env_loader.sh"
 
@@ -169,7 +171,7 @@ else
             echo "Removing tmp..........."
             rm -rf "$VENV_DIR" || echo "❌ Failed to remove venv"
             rm -rf "$BUILD_TMPDIR"/* || echo "❌ Failed to remove build tmp"
-            mkdir -p "$BUILD_TMPDIR" "$PIP_BUILD_TRACKER_DIR" "$WHEEL_CACHE_DIR" "$DIST_DIR" "$UV_CACHE_DIR" "$XDG_CACHE_HOME"
+            mkdir -p "$BUILD_TMPDIR" "$PIP_BUILD_TRACKER_DIR" "$WHEEL_CACHE_DIR" "$DIST_DIR" "$UV_CACHE_DIR" "$XDG_CACHE_HOME" "$CARGO_HOME"
             exit 1
         fi
     done
@@ -191,7 +193,7 @@ else
     rm -rf "$VENV_DIR" || echo "❌ Failed to remove venv"
     rm -rf "$BUILD_TMPDIR"/* || echo "❌ Failed to remove build tmp"
     rm -rf "$WHEEL_CACHE_DIR"/* || echo "❌ Failed to clean wheel cache"
-    mkdir -p "$BUILD_TMPDIR" "$PIP_BUILD_TRACKER_DIR" "$WHEEL_CACHE_DIR" "$DIST_DIR" "$UV_CACHE_DIR" "$XDG_CACHE_HOME"
+    mkdir -p "$BUILD_TMPDIR" "$PIP_BUILD_TRACKER_DIR" "$WHEEL_CACHE_DIR" "$DIST_DIR" "$UV_CACHE_DIR" "$XDG_CACHE_HOME" "$CARGO_HOME"
 fi
 
 # 遍历每个传入的包名
@@ -208,7 +210,7 @@ for PACKAGE_NAME in "$@"; do
     rm -rf "$VENV_DIR" || echo "❌ Failed to remove venv"
     rm -rf "$BUILD_TMPDIR"/* || echo "❌ Failed to remove build tmp"
     rm -rf "$WHEEL_CACHE_DIR"/* || echo "❌ Failed to clean wheel cache"
-    mkdir -p "$BUILD_TMPDIR" "$PIP_BUILD_TRACKER_DIR" "$WHEEL_CACHE_DIR" "$DIST_DIR" "$UV_CACHE_DIR" "$XDG_CACHE_HOME"
+    mkdir -p "$BUILD_TMPDIR" "$PIP_BUILD_TRACKER_DIR" "$WHEEL_CACHE_DIR" "$DIST_DIR" "$UV_CACHE_DIR" "$XDG_CACHE_HOME" "$CARGO_HOME"
 
 
     # 拷贝虚拟环境
@@ -302,7 +304,7 @@ for PACKAGE_NAME in "$@"; do
     rm -rf "$VENV_DIR" || echo "❌ Failed to remove venv"
     rm -rf "$BUILD_TMPDIR"/* || echo "❌ Failed to remove build tmp"
     rm -rf "$WHEEL_CACHE_DIR"/* || echo "❌ Failed to clean wheel cache"
-    mkdir -p "$BUILD_TMPDIR" "$PIP_BUILD_TRACKER_DIR" "$WHEEL_CACHE_DIR" "$DIST_DIR" "$UV_CACHE_DIR" "$XDG_CACHE_HOME"
+    mkdir -p "$BUILD_TMPDIR" "$PIP_BUILD_TRACKER_DIR" "$WHEEL_CACHE_DIR" "$DIST_DIR" "$UV_CACHE_DIR" "$XDG_CACHE_HOME" "$CARGO_HOME"
 
     echo "✅ Done: $PACKAGE_NAME"
     unload_env

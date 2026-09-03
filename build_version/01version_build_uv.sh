@@ -32,6 +32,7 @@ VENV_NAME="tmpbuild_version_uv_$BUILD_FOR_VERSION"
 VENV_DIR="$HOME/pyenvs/$VENV_NAME"
 DIST_DIR="$HOME/pyenvs/store"
 WHEEL_CACHE_DIR="$HOME/.mywheels/version_uv_$BUILD_FOR_VERSION"
+export WHEEL_CACHE_DIR_PY="$WHEEL_CACHE_DIR"
 
 # 相关脚本和文件
 GET_PKGS_SCRIPT="$SCRIPT_DIR/00get_spacemit_pkgs.py"
@@ -319,6 +320,7 @@ while true; do
             set -e
             # func select ---------------------------------------------
 
+            export THE_BUILD_PACKAGE_NAME="${PACKAGE_WITH_VERSION%%==*}"
             run_upload_script "$PACKAGE_WITH_VERSION" || true
 
             deactivate || true

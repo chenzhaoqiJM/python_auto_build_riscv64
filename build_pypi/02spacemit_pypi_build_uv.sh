@@ -28,6 +28,7 @@ VENV_NAME="tmpbuild_auto_spacemit_uv_$BUILD_FOR_VERSION"
 VENV_DIR="$HOME/pyenvs/$VENV_NAME"
 DIST_DIR="$HOME/pyenvs/store"
 WHEEL_CACHE_DIR="$HOME/.mywheels/auto_spacemit_uv_$BUILD_FOR_VERSION"
+export WHEEL_CACHE_DIR_PY="$WHEEL_CACHE_DIR"
 PACKAGE_LIST="$SCRIPT_DIR/packages_spacemit.log"
 FAILED_LIST="$SCRIPT_DIR/failed_spacemit_$BUILD_FOR_VERSION.log"
 
@@ -295,6 +296,7 @@ while true; do
         # func select ---------------------------------------------
 
         # 调用上传脚本（如果存在）
+        export THE_BUILD_PACKAGE_NAME="${PACKAGE_NAME%%==*}"
         run_upload_script "$PACKAGE_NAME" || true
 
         deactivate || true

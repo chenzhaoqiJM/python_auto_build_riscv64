@@ -37,6 +37,7 @@ VENV_NAME="version_single_uv_$BUILD_FOR_VERSION"
 VENV_DIR="$HOME/pyenvs/$VENV_NAME"
 DIST_DIR="$HOME/pyenvs/store"
 WHEEL_CACHE_DIR="$HOME/.mywheels/version_single_uv_$BUILD_FOR_VERSION"
+export WHEEL_CACHE_DIR_PY="$WHEEL_CACHE_DIR"
 
 mkdir -p "$BUILD_TMPDIR" "$PIP_BUILD_TRACKER_DIR" "$WHEEL_CACHE_DIR" "$DIST_DIR" "$UV_CACHE_DIR" "$XDG_CACHE_HOME" "$CARGO_HOME"
 
@@ -236,6 +237,7 @@ for PACKAGE in "$@"; do
 
         if [ -f "$UPLOAD_SCRIPT" ]; then
             echo "🚀 Running upload script for $PACKAGE_WITH_VERSION"
+            export THE_BUILD_PACKAGE_NAME="${PACKAGE_WITH_VERSION%%==*}"
             python "$UPLOAD_SCRIPT"
         else
             echo "⚠️  Upload script not found: $UPLOAD_SCRIPT"
