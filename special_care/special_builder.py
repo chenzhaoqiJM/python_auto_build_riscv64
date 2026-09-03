@@ -79,14 +79,6 @@ def main():
 
         else:
 
-            # 先检查版本
-            if name in CHECK_VERSION_MAP:
-                if_build_here = CHECK_VERSION_MAP[name](package, wheel_dir)
-                if not if_build_here:
-                    print("$$$$-回退到正常构建流程...............")
-                    sys.exit(100)
-
-
             # 检查有无whl
             found, filenames = has_whl_in_gitlab_with_retry(package)
 
@@ -129,6 +121,13 @@ def main():
                         sys.exit(101)
             else:
                 print("没有找到可用的 whl 包，执行构建.................")
+
+            # 仓库中没有目标平台 wheel 时，再选择特殊或通用源码构建。
+            if name in CHECK_VERSION_MAP:
+                if_build_here = CHECK_VERSION_MAP[name](package, wheel_dir)
+                if not if_build_here:
+                    print("$$$$-回退到正常构建流程...............")
+                    sys.exit(100)
 
             if name in SPECIAL_PACKAGES:
                 SPECIAL_PACKAGES[name](package, wheel_dir)

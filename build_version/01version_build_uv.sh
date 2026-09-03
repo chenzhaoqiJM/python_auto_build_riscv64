@@ -267,7 +267,7 @@ while true; do
                 find "$CARGO_HOME" -type f \( -name '.package-cache' -o -name '*.lock' \) -delete 2>/dev/null || true
 
                 timeout --foreground --kill-after=60s "${BUILD_TIMEOUT_SECONDS}s" \
-                    pip wheel --verbose $NO_DEPS --wheel-dir="$WHEEL_CACHE_DIR" "$PACKAGE_WITH_VERSION"
+                    pip wheel --verbose $NO_DEPS --no-binary "$PACKAGE_NAME" --wheel-dir="$WHEEL_CACHE_DIR" "$PACKAGE_WITH_VERSION"
                 build_exit_code=$?
 
                 if [[ $build_exit_code -eq 124 ]]; then

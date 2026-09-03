@@ -252,7 +252,7 @@ for PACKAGE_NAME in "$@"; do
         NO_DEPS=$(python3 "$NO_DEPS_SCRIPT" "$PACKAGE_NAME")
         echo "⚙️  Extra pip flags: $NO_DEPS"
 
-        if ! pip wheel --verbose $NO_DEPS --wheel-dir="$WHEEL_CACHE_DIR" "$PACKAGE_NAME"; then
+        if ! pip wheel --verbose $NO_DEPS --no-binary "${PACKAGE_NAME%%==*}" --wheel-dir="$WHEEL_CACHE_DIR" "$PACKAGE_NAME"; then
             echo "❌ Failed: $PACKAGE_NAME"
             echo "$PACKAGE_NAME" >> "$FAILED_LOG"
             deactivate || true

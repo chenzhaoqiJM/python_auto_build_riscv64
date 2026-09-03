@@ -194,7 +194,7 @@ for PACKAGE in "$@"; do
             # Rust/PyO3 packages may block on Cargo's global package-cache lock.
             find "$CARGO_HOME" -type f \( -name '.package-cache' -o -name '*.lock' \) -delete 2>/dev/null || true
 
-            if ! pip wheel --verbose $NO_DEPS --wheel-dir="$WHEEL_CACHE_DIR" "$PACKAGE_WITH_VERSION"; then
+            if ! pip wheel --verbose $NO_DEPS --no-binary "$PACKAGE" --wheel-dir="$WHEEL_CACHE_DIR" "$PACKAGE_WITH_VERSION"; then
                 echo "❌ Failed: $PACKAGE_WITH_VERSION"
                 echo "$PACKAGE_WITH_VERSION" >> "$FAILED_LIST"
                 deactivate || true
