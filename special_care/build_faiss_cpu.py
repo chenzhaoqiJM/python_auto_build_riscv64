@@ -34,7 +34,7 @@ def clone_or_update_repo(git_dir: Path):
 
 
 def find_matching_tag(git_dir: Path, version: str) -> str:
-    """根据版本号查找匹配的 tag。"""
+    """根据版本号查找匹配的 tag，版本号可带 ``v`` 前缀。"""
     result = subprocess.run(
         ["git", "tag", "-l"],
         capture_output=True,
@@ -44,15 +44,13 @@ def find_matching_tag(git_dir: Path, version: str) -> str:
     )
     tags = [tag.strip() for tag in result.stdout.splitlines() if tag.strip()]
 
-    candidates = [
-        version,
-        f"v{version}",
-    ]
+    normalized_version = version.removeprefix("v")
+    candidates = [normalized_version, f"v{normalized_version}"]
 
     matching_tags = [tag for tag in tags if tag in candidates]
     if not matching_tags:
         # 兼容诸如 1.13.0.post1 / 1.13.0rc1 等前缀匹配情况
-        prefix_candidates = [version, f"v{version}"]
+        prefix_candidates = candidates
         matching_tags = [
             tag for tag in tags
             if any(tag.startswith(prefix) for prefix in prefix_candidates)
