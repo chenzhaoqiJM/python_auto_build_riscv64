@@ -38,7 +38,7 @@ AUDITWHEEL_PLAT_DEF = os.environ.get("AUDITWHEEL_PLAT_DEF")
 # whl 的存储和路径
 WHEEL_CACHE_DIR = os.environ.get("WHEEL_CACHE_DIR_PY", "")
 WHEEL_CACHE_DIR = Path(os.path.expanduser(WHEEL_CACHE_DIR))
-FROM_WHEEL_CACHE_FLAG=False
+UPLOAD_CURRENT_TARGET_ONLY = os.getenv("UPLOAD_CURRENT_TARGET_ONLY") == "1"
 
 # 包名或者源码路径
 THE_BUILD_PACKAGE_NAME = os.environ.get("THE_BUILD_PACKAGE_NAME", "")
@@ -52,36 +52,31 @@ def canonicalize_package_name(name: str) -> str:
     return re.sub(r"[-_.]+", "-", name).lower()
 
 def find_built_wheels():
-    print("🔍 Searching for built wheels in pip cache...")
-    whls_pip = list(PIP_CACHE_DIR.rglob("*.whl"))
-    # whls_uv = list(UV_CACHE_DIR.rglob("*.whl"))
-    whls_uv = []
+    if not UPLOAD_CURRENT_TARGET_ONLY:
+        print("🔍 Searching for built wheels in pip cache...")
+        whls = [path for path in PIP_CACHE_DIR.rglob("*.whl") if path.is_file()]
+        if whls:
+            print("📦 Found wheel files:")
+            for wheel_path in whls:
+                print(f"  - {wheel_path.resolve()}")
+            return whls
 
-    new_whls = []
-    for w in whls_pip + whls_uv:
-        if w.is_file():
-            new_whls.append(w)
-    whls = new_whls
+    print(f"🔍 Searching current build output: {WHEEL_CACHE_DIR}")
+    if str(WHEEL_CACHE_DIR) in ("", "."):
+        return []
 
-    if not whls:
-        print(f"⚠️  No .whl files found. try scaning {str(WHEEL_CACHE_DIR)}")
-
-        if str(WHEEL_CACHE_DIR) != '.' and str(WHEEL_CACHE_DIR) != '':
-            FROM_WHEEL_CACHE_FLAG = True
-            _tmp_whls = list(WHEEL_CACHE_DIR.rglob("*.whl"))
-            _tmp_whls = [w for w in _tmp_whls if w.is_file()]
-            target_name = canonicalize_package_name(
-                THE_BUILD_PACKAGE_NAME.split("==", 1)[0]
-            )
-
-            for _whl_file in _tmp_whls:
-                wheel_name = canonicalize_package_name(
-                    _whl_file.name.split("-", 1)[0]
-                )
-                if target_name and wheel_name == target_name:
-                    whls.append(_whl_file)
-                    print(f"✅ find the relevant pkg: {_whl_file}")
-                    break
+    target_name = canonicalize_package_name(
+        THE_BUILD_PACKAGE_NAME.split("==", 1)[0]
+    )
+    whls = []
+    for wheel_path in sorted(WHEEL_CACHE_DIR.rglob("*.whl")):
+        if not wheel_path.is_file():
+            continue
+        wheel_name = canonicalize_package_name(
+            wheel_path.name.split("-", 1)[0]
+        )
+        if target_name and wheel_name == target_name:
+            whls.append(wheel_path)
 
     print("📦 Found wheel files:")
     for w in whls:

@@ -110,6 +110,12 @@ Versions are built one by one in the specified order. Each version uses an indep
 ./02hp_build_uv.sh
 ```
 
+The batch builder resolves each requested package's runtime dependency closure
+for the selected Python interpreter. Dependencies are processed before the
+requested package and use their own `dynamic_env` and `special_care` handlers.
+If official PyPI provides a wheel accepted by the target interpreter, the build
+is skipped without requiring its manylinux tag to equal `AUDITWHEEL_PLAT_DEF`.
+
 ---
 
 ### build_pypi - Batch Builds for Community PyPI Packages
