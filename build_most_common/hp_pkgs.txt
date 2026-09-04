@@ -39,7 +39,6 @@ pydantic
 scikit-image
 uvloop
 patchelf
-cmake
 joblib
 regex
 nltk
@@ -82,7 +81,6 @@ transforms3d
 invoke
 fabric
 cookiecutter
-virtualenv
 hatch
 poetry
 h5py
