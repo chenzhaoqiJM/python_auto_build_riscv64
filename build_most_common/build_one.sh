@@ -30,7 +30,7 @@ if [ -n "${BUILD_FOR_VERSIONS:-}" ]; then
         echo "============================================="
         echo "🚀 开始构建 Python $BUILD_VERSION"
         echo "============================================="
-        if ! BUILD_FOR_VERSION="$BUILD_VERSION" BUILD_FOR_VERSIONS= "$0" "$@"; then
+        if ! BUILD_FOR_VERSION="$BUILD_VERSION" BUILD_FOR_VERSIONS='' "$0" "$@"; then
             echo "❌ Python $BUILD_VERSION 构建失败"
             SCRIPT_EXIT_CODE=1
         else
@@ -58,7 +58,7 @@ for PACKAGE_ARG in "$@"; do
 done
 
 ensure_uv
-uv python install $BUILD_FOR_VERSION
+uv python install "$BUILD_FOR_VERSION"
 
 echo "开始构建 Python $BUILD_FOR_VERSION ..."
 # 下面继续构建逻辑
@@ -66,11 +66,7 @@ echo "开始构建 Python $BUILD_FOR_VERSION ..."
 # 任务脚本
 UPLOAD_SCRIPT="$SCRIPT_DIR/../common_py/00upload_with_repair.py"  # 用于缓存虚拟环境上传（第一次）
 SPECIAL_BUILDER_SCRIPT="$SCRIPT_DIR/../special_care/special_builder.py"
-NO_DEPS_SCRIPT="$SCRIPT_DIR/../common_py/check_no_deps.py"
-FETCH_VERSION_SCRIPT="$SCRIPT_DIR/../common_py/02get_latest_version.py"
-
-# 跳过包
-SKIP_LIST="$SCRIPT_DIR/../common_py/skip_pkgs.txt"
+DEPENDENCY_PLAN_SCRIPT="$SCRIPT_DIR/../common_py/dependency_plan.py"
 
 # 可配置字段
 export PIP_CACHE_DIR="$HOME/.cache/pip/build_one_uv_$BUILD_FOR_VERSION"
@@ -85,6 +81,8 @@ VENV_DIR="$HOME/pyenvs/$VENV_NAME"
 DIST_DIR="$HOME/pyenvs/store"
 WHEEL_CACHE_DIR="$HOME/.mywheels/build_one_uv_$BUILD_FOR_VERSION"
 export WHEEL_CACHE_DIR_PY="$WHEEL_CACHE_DIR"
+FAILED_LIST="$SCRIPT_DIR/failed_test_${BUILD_FOR_VERSION}.log"
+BUILD_TIMEOUT_SECONDS=$((24 * 60 * 60))
 UPLOAD_TIMEOUT_SECONDS=${UPLOAD_TIMEOUT_SECONDS:-3600}
 
 mkdir -p "$BUILD_TMPDIR" "$PIP_BUILD_TRACKER_DIR" "$WHEEL_CACHE_DIR" "$DIST_DIR" "$UV_CACHE_DIR" "$XDG_CACHE_HOME" "$CARGO_HOME"
@@ -94,6 +92,17 @@ if ! command -v timeout >/dev/null 2>&1; then
     exit 1
 fi
 
+record_failed() {
+    local package_name="$1"
+
+    if grep -Fqx -- "$package_name" "$FAILED_LIST" 2>/dev/null; then
+        return 0
+    fi
+    if ! echo "$package_name" >> "$FAILED_LIST"; then
+        echo "⚠️ Failed to write failed package to $FAILED_LIST: $package_name"
+    fi
+}
+
 run_upload_script() {
     local package_name="$1"
 
@@ -101,7 +110,7 @@ run_upload_script() {
         echo "🚀 Running upload script for $package_name"
         if ! timeout --foreground --kill-after=60s "${UPLOAD_TIMEOUT_SECONDS}s" python "$UPLOAD_SCRIPT"; then
             echo "⚠️ Upload script failed or timed out after ${UPLOAD_TIMEOUT_SECONDS}s for $package_name"
-            echo "$package_name" >> "$FAILED_LOG"
+            record_failed "$package_name"
             return 1
         fi
     else
@@ -135,8 +144,7 @@ if [ $# -eq 0 ]; then
 fi
 
 # 当前版本单独记录失败包，避免多版本构建互相覆盖日志。
-FAILED_LOG="$SCRIPT_DIR/failed_test_${BUILD_FOR_VERSION}.log"
-> "$FAILED_LOG"
+: > "$FAILED_LIST"
 
 # 清理旧虚拟环境
 if [ -d "$VENV_DIR" ]; then
@@ -150,7 +158,7 @@ if [ -d "$DIST_DIR/$VENV_NAME" ]; then
 else
     echo "📦 Creating new virtualenv at $VENV_DIR"
     # python3 -m venv --copies "$VENV_DIR"
-    uv venv "$VENV_DIR" --python=$BUILD_FOR_VERSION
+    uv venv "$VENV_DIR" --python="$BUILD_FOR_VERSION"
 
     source "$VENV_DIR/bin/activate"
     echo "⬆️  Installing pip & build tools..."
@@ -170,7 +178,7 @@ else
             sleep 2
             echo "Removing tmp..........."
             rm -rf "$VENV_DIR" || echo "❌ Failed to remove venv"
-            rm -rf "$BUILD_TMPDIR"/* || echo "❌ Failed to remove build tmp"
+            rm -rf "${BUILD_TMPDIR:?}"/* || echo "❌ Failed to remove build tmp"
             mkdir -p "$BUILD_TMPDIR" "$PIP_BUILD_TRACKER_DIR" "$WHEEL_CACHE_DIR" "$DIST_DIR" "$UV_CACHE_DIR" "$XDG_CACHE_HOME" "$CARGO_HOME"
             exit 1
         fi
@@ -191,79 +199,93 @@ else
 
     echo "🧹 Cleaning tmp build and venv..."
     rm -rf "$VENV_DIR" || echo "❌ Failed to remove venv"
-    rm -rf "$BUILD_TMPDIR"/* || echo "❌ Failed to remove build tmp"
-    rm -rf "$WHEEL_CACHE_DIR"/* || echo "❌ Failed to clean wheel cache"
+    rm -rf "${BUILD_TMPDIR:?}"/* || echo "❌ Failed to remove build tmp"
+    rm -rf "${WHEEL_CACHE_DIR:?}"/* || echo "❌ Failed to clean wheel cache"
     mkdir -p "$BUILD_TMPDIR" "$PIP_BUILD_TRACKER_DIR" "$WHEEL_CACHE_DIR" "$DIST_DIR" "$UV_CACHE_DIR" "$XDG_CACHE_HOME" "$CARGO_HOME"
 fi
 
-# 遍历每个传入的包名
-for PACKAGE_NAME in "$@"; do
-    echo "=============================="
-    echo "🔧 准备构建: $PACKAGE_NAME"
-    echo "=============================="
+RESOLVER_PYTHON="$DIST_DIR/$VENV_NAME/bin/python"
 
-    PACKAGE_NAME=$(python3 $FETCH_VERSION_SCRIPT "$PACKAGE_NAME")
-
-    # 清除历史残留
-    echo "🧹 Cleaning tmp build and venv..."
-    command -v deactivate &>/dev/null && deactivate || true
+cleanup_package_workspace() {
+    if command -v deactivate &>/dev/null; then
+        deactivate || true
+    fi
     rm -rf "$VENV_DIR" || echo "❌ Failed to remove venv"
-    rm -rf "$BUILD_TMPDIR"/* || echo "❌ Failed to remove build tmp"
-    rm -rf "$WHEEL_CACHE_DIR"/* || echo "❌ Failed to clean wheel cache"
+    rm -rf "${BUILD_TMPDIR:?}"/* || echo "❌ Failed to remove build tmp"
+    rm -rf "${WHEEL_CACHE_DIR:?}"/* || echo "❌ Failed to clean wheel cache"
     mkdir -p "$BUILD_TMPDIR" "$PIP_BUILD_TRACKER_DIR" "$WHEEL_CACHE_DIR" "$DIST_DIR" "$UV_CACHE_DIR" "$XDG_CACHE_HOME" "$CARGO_HOME"
+}
 
+build_with_special_python() {
+    echo "⚙️  Checking for special build path for $PACKAGE_NAME"
 
-    # 拷贝虚拟环境
+    timeout --foreground --kill-after=60s "${BUILD_TIMEOUT_SECONDS}s" \
+        python3 "$SPECIAL_BUILDER_SCRIPT" "$PACKAGE_NAME" "$WHEEL_CACHE_DIR"
+    local exit_code=$?
+
+    if [[ $exit_code -eq 0 ]]; then
+        echo "✅ Special build complete for $PACKAGE_NAME"
+        return 0
+    elif [[ $exit_code -eq 101 ]]; then
+        return 101
+    elif [[ $exit_code -eq 100 ]]; then
+        echo "ℹ️  $PACKAGE_NAME not handled specially, fallback to generic build"
+        return 100
+    elif [[ $exit_code -eq 124 ]]; then
+        echo "⏰ Timeout (>24h), skip package: $PACKAGE_NAME"
+        return 124
+    fi
+
+    echo "❌ Special builder failed: $PACKAGE_NAME"
+    return 1
+}
+
+build_generic_package() {
+    # 依赖已拆成独立队列项，每个包都使用自己的 dynamic_env/special_care。
+    find "$CARGO_HOME" -type f \( -name '.package-cache' -o -name '*.lock' \) -delete 2>/dev/null || true
+
+    timeout --foreground --kill-after=60s "${BUILD_TIMEOUT_SECONDS}s" \
+        pip wheel --verbose --no-deps --no-binary "${PACKAGE_NAME%%==*}" \
+        --wheel-dir="$WHEEL_CACHE_DIR" "$PACKAGE_NAME"
+    local build_exit_code=$?
+
+    if [[ $build_exit_code -eq 124 ]]; then
+        echo "⏰ Timeout (>24h), skip package: $PACKAGE_NAME"
+        return 124
+    elif [[ $build_exit_code -ne 0 ]]; then
+        echo "❌ Failed: $PACKAGE_NAME"
+        return 1
+    fi
+    return 0
+}
+
+process_package() {
+    local package_spec="$1"
+    local exit_code build_result upload_result
+    PACKAGE_NAME="$package_spec"
+
+    echo "🔁 Processing $PACKAGE_NAME"
+
+    if timeout --foreground --kill-after=30s 600s \
+        env -u PYTHONPATH "$RESOLVER_PYTHON" "$DEPENDENCY_PLAN_SCRIPT" \
+        official-wheel "$PACKAGE_NAME"; then
+        echo "⏭️  Skipping $PACKAGE_NAME (official PyPI has an installable wheel)"
+        return 0
+    fi
+
+    echo "🧹 Cleaning tmp build and venv..."
+    cleanup_package_workspace
+
+    echo "📂 Copying venv..."
     cp -r "$DIST_DIR/$VENV_NAME" "$VENV_DIR"
     source "$VENV_DIR/bin/activate"
 
-    # 动态环境变量
     source "$ENV_LOADER_SH" "$PACKAGE_NAME"
     load_env
     echo "LD_LIBRARY_PATH=${LD_LIBRARY_PATH}"
-
     echo "🔨 Building wheel for $PACKAGE_NAME ..."
 
-    # 下载源码构建，适应于需要patch代码的情况
-    build_with_special_python() {
-        echo "⚙️  Checking for special build path for $PACKAGE_NAME"
-
-        python3 "$SPECIAL_BUILDER_SCRIPT" "$PACKAGE_NAME" "$WHEEL_CACHE_DIR"
-        exit_code=$?
-
-        if [[ $exit_code -eq 0 ]]; then
-            echo "✅ Special build complete for $PACKAGE_NAME"
-            return 0
-        elif [[ $exit_code -eq 101 ]]; then
-            return 101
-        elif [[ $exit_code -eq 100 ]]; then
-            echo "ℹ️  $PACKAGE_NAME not handled specially, fallback to generic build"
-            return 100
-        else
-            echo "❌ Special builder failed: $PACKAGE_NAME"
-            echo "$PACKAGE_NAME" >> "$FAILED_LOG"
-            return 1
-        fi
-    }
-
-    # 直接构建
-    build_generic_package() {
-
-        NO_DEPS=$(python3 "$NO_DEPS_SCRIPT" "$PACKAGE_NAME")
-        echo "⚙️  Extra pip flags: $NO_DEPS"
-
-        if ! pip wheel --verbose $NO_DEPS --no-binary "${PACKAGE_NAME%%==*}" --wheel-dir="$WHEEL_CACHE_DIR" "$PACKAGE_NAME"; then
-            echo "❌ Failed: $PACKAGE_NAME"
-            echo "$PACKAGE_NAME" >> "$FAILED_LOG"
-            deactivate || true
-            return 1
-        fi
-        return 0
-    }
-
-    # func select ---------------------------------------------
-    set +e  # 临时关闭 set -e
-
+    set +e
     build_with_special_python
     exit_code=$?
 
@@ -272,48 +294,115 @@ for PACKAGE_NAME in "$@"; do
     elif [[ $exit_code -eq 101 ]]; then
         echo "⏭️  Skipping $PACKAGE_NAME (target platform wheel already exists)"
         set -e
+        deactivate || true
         unload_env
-        continue
+        return 0
     elif [[ $exit_code -eq 100 ]]; then
         echo "build_generic_package starting........"
         build_generic_package
         build_result=$?
-
         if [[ $build_result -ne 0 ]]; then
             set -e
+            deactivate || true
             unload_env
-            continue
+            return "$build_result"
         fi
     else
         set -e
+        deactivate || true
         unload_env
-        continue
+        return "$exit_code"
     fi
-
     set -e
-    # func select ---------------------------------------------
 
-    echo "📦 上传构建的 wheel"
     export THE_BUILD_PACKAGE_NAME="${PACKAGE_NAME%%==*}"
-    run_upload_script "$PACKAGE_NAME" || true
+    export UPLOAD_CURRENT_TARGET_ONLY=1
+    upload_result=0
+    run_upload_script "$PACKAGE_NAME" || upload_result=$?
 
-    # 清除环境
     deactivate || true
     sleep 2
-    echo "🧹 Cleaning tmp build and venv..."
-    rm -rf "$VENV_DIR" || echo "❌ Failed to remove venv"
-    rm -rf "$BUILD_TMPDIR"/* || echo "❌ Failed to remove build tmp"
-    rm -rf "$WHEEL_CACHE_DIR"/* || echo "❌ Failed to clean wheel cache"
-    mkdir -p "$BUILD_TMPDIR" "$PIP_BUILD_TRACKER_DIR" "$WHEEL_CACHE_DIR" "$DIST_DIR" "$UV_CACHE_DIR" "$XDG_CACHE_HOME" "$CARGO_HOME"
-
-    echo "✅ Done: $PACKAGE_NAME"
     unload_env
-    echo "---------------------------------------------"
+
+    if [[ $upload_result -ne 0 ]]; then
+        return "$upload_result"
+    fi
+    echo "✅ Done for $PACKAGE_NAME"
+    echo "-------------------------------------------------------------------"
+    return 0
+}
+
+process_dependency_closure() {
+    local requested_package="$1"
+    local plan_output package_name
+    local root_failed=0
+    local last_plan_index plan_index
+    local -a build_plan
+
+    echo "🔎 Resolving dependency closure for $requested_package"
+    if ! plan_output=$(env -u PYTHONPATH "$RESOLVER_PYTHON" \
+        "$DEPENDENCY_PLAN_SCRIPT" resolve "$requested_package"); then
+        echo "❌ Failed to resolve dependency closure: $requested_package"
+        record_failed "$requested_package"
+        return 1
+    fi
+    if [[ -z "$plan_output" ]]; then
+        echo "❌ Empty dependency plan: $requested_package"
+        record_failed "$requested_package"
+        return 1
+    fi
+
+    mapfile -t build_plan <<< "$plan_output"
+    last_plan_index=$((${#build_plan[@]} - 1))
+
+    for plan_index in "${!build_plan[@]}"; do
+        package_name="${build_plan[$plan_index]}"
+        if [[ -z "$package_name" ]]; then
+            continue
+        fi
+
+        if [[ $plan_index -eq $last_plan_index && $root_failed -ne 0 ]]; then
+            echo "⏭️  Not completing $requested_package because a dependency failed"
+            break
+        fi
+
+        if [[ "${PACKAGE_RESULTS[$package_name]:-}" == "success" ]]; then
+            echo "⏭️  Already satisfied in this round: $package_name"
+            continue
+        elif [[ "${PACKAGE_RESULTS[$package_name]:-}" == "failed" ]]; then
+            echo "❌ Dependency already failed in this round: $package_name"
+            root_failed=1
+            continue
+        fi
+
+        if process_package "$package_name"; then
+            PACKAGE_RESULTS["$package_name"]="success"
+        else
+            PACKAGE_RESULTS["$package_name"]="failed"
+            root_failed=1
+            record_failed "$package_name"
+        fi
+    done
+
+    if [[ $root_failed -ne 0 ]]; then
+        record_failed "$requested_package"
+        return 1
+    fi
+    echo "✅ Dependency closure complete for $requested_package"
+    return 0
+}
+
+declare -A PACKAGE_RESULTS=()
+for REQUESTED_PACKAGE in "$@"; do
+    echo "=============================="
+    echo "🔧 准备构建: $REQUESTED_PACKAGE"
+    echo "=============================="
+    process_dependency_closure "$REQUESTED_PACKAGE" || true
 done
 
-if [ -s "$FAILED_LOG" ]; then
+if [ -s "$FAILED_LIST" ]; then
     echo "❌ 以下包构建失败："
-    cat "$FAILED_LOG"
+    cat "$FAILED_LIST"
     exit 1
 else
     echo "🎉 所有包均构建成功！"

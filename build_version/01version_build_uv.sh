@@ -11,12 +11,14 @@ source "$SCRIPT_DIR/../common_func.sh"
 check_build_version
 
 ensure_uv
-uv python install $BUILD_FOR_VERSION
+uv python install "$BUILD_FOR_VERSION"
 
 echo "开始构建 Python $BUILD_FOR_VERSION ..."
 # 下面继续构建逻辑
 
 UPLOAD_SCRIPT="$SCRIPT_DIR/../common_py/00upload_with_repair.py"
+SPECIAL_BUILDER_SCRIPT="$SCRIPT_DIR/../special_care/special_builder.py"
+DEPENDENCY_PLAN_SCRIPT="$SCRIPT_DIR/../common_py/dependency_plan.py"
 
 # 可配置字段
 export PIP_CACHE_DIR="$HOME/.cache/pip/wheels_version_uv_$BUILD_FOR_VERSION"
@@ -49,6 +51,17 @@ if ! command -v timeout >/dev/null 2>&1; then
     exit 1
 fi
 
+record_failed() {
+    local package_name="$1"
+
+    if grep -Fqx -- "$package_name" "$FAILED_LIST" 2>/dev/null; then
+        return 0
+    fi
+    if ! echo "$package_name" >> "$FAILED_LIST"; then
+        echo "⚠️ Failed to write failed package to $FAILED_LIST: $package_name"
+    fi
+}
+
 run_upload_script() {
     local package_name="$1"
 
@@ -56,7 +69,7 @@ run_upload_script() {
         echo "🚀 Running upload script for $package_name"
         if ! timeout --foreground --kill-after=60s "${UPLOAD_TIMEOUT_SECONDS}s" python "$UPLOAD_SCRIPT"; then
             echo "⚠️ Upload script failed or timed out after ${UPLOAD_TIMEOUT_SECONDS}s for $package_name"
-            echo "$package_name" >> "$FAILED_LIST"
+            record_failed "$package_name"
             return 1
         fi
     else
@@ -96,7 +109,7 @@ if [ -d "$DIST_DIR/$VENV_NAME" ]; then
     echo "✅ Cached virtualenv ready at $DIST_DIR"
 else
     echo "📦 Creating new virtualenv at $VENV_DIR"
-    uv venv "$VENV_DIR" --python=$BUILD_FOR_VERSION
+    uv venv "$VENV_DIR" --python="$BUILD_FOR_VERSION"
 
     source "$VENV_DIR/bin/activate"
     echo "⬆️  Installing pip & build tools..."
@@ -116,7 +129,7 @@ else
             sleep 2
             echo "Removing tmp..........."
             rm -rf "$VENV_DIR" || echo "❌ Failed to remove venv"
-            rm -rf "$BUILD_TMPDIR"/* || echo "❌ Failed to remove build tmp"
+            rm -rf "${BUILD_TMPDIR:?}"/* || echo "❌ Failed to remove build tmp"
             mkdir -p "$BUILD_TMPDIR" "$PIP_BUILD_TRACKER_DIR" "$WHEEL_CACHE_DIR" "$DIST_DIR" "$UV_CACHE_DIR" "$XDG_CACHE_HOME" "$CARGO_HOME"
             exit 1
         fi
@@ -137,9 +150,198 @@ else
 
     echo "Removing tmp..........."
     rm -rf "$VENV_DIR" || echo "❌ Failed to remove venv"
-    rm -rf "$BUILD_TMPDIR"/* || echo "❌ Failed to remove build tmp"
+    rm -rf "${BUILD_TMPDIR:?}"/* || echo "❌ Failed to remove build tmp"
     mkdir -p "$BUILD_TMPDIR" "$PIP_BUILD_TRACKER_DIR" "$WHEEL_CACHE_DIR" "$DIST_DIR" "$UV_CACHE_DIR" "$XDG_CACHE_HOME" "$CARGO_HOME"
 fi
+
+
+RESOLVER_PYTHON="$DIST_DIR/$VENV_NAME/bin/python"
+
+cleanup_package_workspace() {
+    if command -v deactivate &>/dev/null; then
+        deactivate || true
+    fi
+    rm -rf "$VENV_DIR" || echo "❌ Failed to remove venv"
+    rm -rf "${BUILD_TMPDIR:?}"/* || echo "❌ Failed to remove build tmp"
+    rm -rf "${WHEEL_CACHE_DIR:?}"/* || echo "❌ Failed to clean wheel cache"
+    mkdir -p "$BUILD_TMPDIR" "$PIP_BUILD_TRACKER_DIR" "$WHEEL_CACHE_DIR" "$DIST_DIR" "$UV_CACHE_DIR" "$XDG_CACHE_HOME" "$CARGO_HOME"
+}
+
+build_with_special_python() {
+    echo "⚙️  Checking for special build path for $PACKAGE_NAME"
+
+    timeout --foreground --kill-after=60s "${BUILD_TIMEOUT_SECONDS}s" \
+        python3 "$SPECIAL_BUILDER_SCRIPT" "$PACKAGE_NAME" "$WHEEL_CACHE_DIR"
+    local exit_code=$?
+
+    if [[ $exit_code -eq 0 ]]; then
+        echo "✅ Special build complete for $PACKAGE_NAME"
+        return 0
+    elif [[ $exit_code -eq 101 ]]; then
+        return 101
+    elif [[ $exit_code -eq 100 ]]; then
+        echo "ℹ️  $PACKAGE_NAME not handled specially, fallback to generic build"
+        return 100
+    elif [[ $exit_code -eq 124 ]]; then
+        echo "⏰ Timeout (>24h), skip package: $PACKAGE_NAME"
+        return 124
+    fi
+
+    echo "❌ Special builder failed: $PACKAGE_NAME"
+    return 1
+}
+
+build_generic_package() {
+    # 依赖已拆成独立队列项，每个包都使用自己的 dynamic_env/special_care。
+    find "$CARGO_HOME" -type f \( -name '.package-cache' -o -name '*.lock' \) -delete 2>/dev/null || true
+
+    timeout --foreground --kill-after=60s "${BUILD_TIMEOUT_SECONDS}s" \
+        pip wheel --verbose --no-deps --no-binary "${PACKAGE_NAME%%==*}" \
+        --wheel-dir="$WHEEL_CACHE_DIR" "$PACKAGE_NAME"
+    local build_exit_code=$?
+
+    if [[ $build_exit_code -eq 124 ]]; then
+        echo "⏰ Timeout (>24h), skip package: $PACKAGE_NAME"
+        return 124
+    elif [[ $build_exit_code -ne 0 ]]; then
+        echo "❌ Failed: $PACKAGE_NAME"
+        return 1
+    fi
+    return 0
+}
+
+process_package() {
+    local package_spec="$1"
+    local exit_code build_result upload_result
+    PACKAGE_NAME="$package_spec"
+
+    echo "🔁 Processing $PACKAGE_NAME"
+
+    if timeout --foreground --kill-after=30s 600s \
+        env -u PYTHONPATH "$RESOLVER_PYTHON" "$DEPENDENCY_PLAN_SCRIPT" \
+        official-wheel "$PACKAGE_NAME"; then
+        echo "⏭️  Skipping $PACKAGE_NAME (official PyPI has an installable wheel)"
+        return 0
+    fi
+
+    echo "🧹 Cleaning tmp build and venv..."
+    cleanup_package_workspace
+
+    echo "📂 Copying venv..."
+    cp -r "$DIST_DIR/$VENV_NAME" "$VENV_DIR"
+    source "$VENV_DIR/bin/activate"
+
+    source "$ENV_LOADER_SH" "$PACKAGE_NAME"
+    load_env
+    echo "LD_LIBRARY_PATH=${LD_LIBRARY_PATH}"
+    echo "🔨 Building wheel for $PACKAGE_NAME ..."
+
+    set +e
+    build_with_special_python
+    exit_code=$?
+
+    if [[ $exit_code -eq 0 ]]; then
+        echo "📦 $PACKAGE_NAME handled specially"
+    elif [[ $exit_code -eq 101 ]]; then
+        echo "⏭️  Skipping $PACKAGE_NAME (target platform wheel already exists)"
+        set -e
+        deactivate || true
+        unload_env
+        return 0
+    elif [[ $exit_code -eq 100 ]]; then
+        echo "build_generic_package starting........"
+        build_generic_package
+        build_result=$?
+        if [[ $build_result -ne 0 ]]; then
+            set -e
+            deactivate || true
+            unload_env
+            return "$build_result"
+        fi
+    else
+        set -e
+        deactivate || true
+        unload_env
+        return "$exit_code"
+    fi
+    set -e
+
+    export THE_BUILD_PACKAGE_NAME="${PACKAGE_NAME%%==*}"
+    export UPLOAD_CURRENT_TARGET_ONLY=1
+    upload_result=0
+    run_upload_script "$PACKAGE_NAME" || upload_result=$?
+
+    deactivate || true
+    sleep 2
+    unload_env
+
+    if [[ $upload_result -ne 0 ]]; then
+        return "$upload_result"
+    fi
+    echo "✅ Done for $PACKAGE_NAME"
+    echo "-------------------------------------------------------------------"
+    return 0
+}
+
+process_dependency_closure() {
+    local requested_package="$1"
+    local plan_output package_name
+    local root_failed=0
+    local last_plan_index plan_index
+    local -a build_plan
+
+    echo "🔎 Resolving dependency closure for $requested_package"
+    if ! plan_output=$(env -u PYTHONPATH "$RESOLVER_PYTHON" \
+        "$DEPENDENCY_PLAN_SCRIPT" resolve "$requested_package"); then
+        echo "❌ Failed to resolve dependency closure: $requested_package"
+        record_failed "$requested_package"
+        return 1
+    fi
+    if [[ -z "$plan_output" ]]; then
+        echo "❌ Empty dependency plan: $requested_package"
+        record_failed "$requested_package"
+        return 1
+    fi
+
+    mapfile -t build_plan <<< "$plan_output"
+    last_plan_index=$((${#build_plan[@]} - 1))
+
+    for plan_index in "${!build_plan[@]}"; do
+        package_name="${build_plan[$plan_index]}"
+        if [[ -z "$package_name" ]]; then
+            continue
+        fi
+
+        if [[ $plan_index -eq $last_plan_index && $root_failed -ne 0 ]]; then
+            echo "⏭️  Not completing $requested_package because a dependency failed"
+            break
+        fi
+
+        if [[ "${PACKAGE_RESULTS[$package_name]:-}" == "success" ]]; then
+            echo "⏭️  Already satisfied in this round: $package_name"
+            continue
+        elif [[ "${PACKAGE_RESULTS[$package_name]:-}" == "failed" ]]; then
+            echo "❌ Dependency already failed in this round: $package_name"
+            root_failed=1
+            continue
+        fi
+
+        if process_package "$package_name"; then
+            PACKAGE_RESULTS["$package_name"]="success"
+        else
+            PACKAGE_RESULTS["$package_name"]="failed"
+            root_failed=1
+            record_failed "$package_name"
+        fi
+    done
+
+    if [[ $root_failed -ne 0 ]]; then
+        record_failed "$requested_package"
+        return 1
+    fi
+    echo "✅ Dependency closure complete for $requested_package"
+    return 0
+}
 
 
 # 无限循环处理包
@@ -147,31 +349,22 @@ while true; do
     echo "⏳ Starting new round at $(date)"
 
     rm -rf "$ALL_PKGS_LIST" || echo "Failed to remove $ALL_PKGS_LIST"
-
-    # 执行 00get_spacemit_pkgs.py 获取包名列表
     echo "🔄 Running 00get_spacemit_pkgs.py to get package names..."
     python3 "$GET_PKGS_SCRIPT"
 
-    # 检查 packages.log 是否成功生成
     if [ ! -f "$ALL_PKGS_LIST" ]; then
         echo "⚠️ $ALL_PKGS_LIST not found. Exiting."
         exit 1
     fi
 
-    # 清空失败记录
-    > "$FAILED_LIST"
+    : > "$FAILED_LIST"
+    declare -A PACKAGE_RESULTS=()
 
     while IFS= read -r PACKAGE_NAME || [[ -n "$PACKAGE_NAME" ]]; do
         PACKAGE_NAME=$(echo "$PACKAGE_NAME" | xargs)
-        if [ -z "$PACKAGE_NAME" ]; then
+        if [ -z "$PACKAGE_NAME" ] || [[ "$PACKAGE_NAME" == \#* ]]; then
             continue
         fi
-
-        # if [ -f "$SKIP_LIST" ] && grep -Fxq "$PACKAGE_NAME" "$SKIP_LIST"; then
-        #     echo "⏭️  Skipping $PACKAGE_NAME (in skip list)"
-        #     echo "---------------------------------------------"
-        #     continue
-        # fi
 
         if [ -f "$SKIP_LIST" ]; then
             while read -r pattern; do
@@ -185,19 +378,16 @@ while true; do
             done < "$SKIP_LIST"
         fi
 
-        echo "🔁 Processing $PACKAGE_NAME"
-
-        # 执行 00get_pkg_version.py 获取版本列表
         echo "🔄 Running 00get_pkg_version.py for $PACKAGE_NAME..."
-
         if ! python3 "$GET_PKGS_VERSION" "$PACKAGE_NAME"; then
+            record_failed "$PACKAGE_NAME"
             continue
         fi
 
-        # 检查版本文件是否成功生成
         VERSION_FILE="$SCRIPT_DIR/$PACKAGE_NAME.log"
         if [ ! -f "$VERSION_FILE" ]; then
             echo "❌ Version file for $PACKAGE_NAME not found. Skipping."
+            record_failed "$PACKAGE_NAME"
             continue
         fi
 
@@ -208,141 +398,20 @@ while true; do
             fi
 
             PACKAGE_WITH_VERSION="$PACKAGE_NAME==$PACKAGE_VERSION_NAME"
-            echo "🔁 Processing $PACKAGE_WITH_VERSION"
-
-            echo "🧹 Cleaning tmp build and venv..."
-            command -v deactivate &>/dev/null && deactivate || true
-            rm -rf "$VENV_DIR" || echo "❌ Failed to remove venv"
-            rm -rf "$BUILD_TMPDIR"/* || echo "❌ Failed to remove build tmp"
-            mkdir -p "$PIP_BUILD_TRACKER_DIR" "$CARGO_HOME"
-            rm -rf "$WHEEL_CACHE_DIR"/* || echo "❌ Failed to clean wheel cache"
-
-            echo "📂 Copying venv..."
-            cp -r "$DIST_DIR/$VENV_NAME" "$VENV_DIR"
-            source "$VENV_DIR/bin/activate"
-
-            # 加载动态环境变量
-            source "$ENV_LOADER_SH" "$PACKAGE_WITH_VERSION"
-            load_env
-            echo "LD_LIBRARY_PATH=${LD_LIBRARY_PATH}"
-
-            echo "🔨 Building wheel for $PACKAGE_WITH_VERSION ..."
-
-            build_with_special_python() {
-                echo "⚙️  Checking for special build path for $PACKAGE_WITH_VERSION"
-
-                timeout --foreground --kill-after=60s "${BUILD_TIMEOUT_SECONDS}s" \
-                    python3 "$SCRIPT_DIR/../special_care/special_builder.py" "$PACKAGE_WITH_VERSION" "$WHEEL_CACHE_DIR"
-                exit_code=$?
-
-                if [[ $exit_code -eq 0 ]]; then
-                    echo "✅ Special build complete for $PACKAGE_WITH_VERSION"
-                    return 0
-                elif [[ $exit_code -eq 101 ]]; then
-                    return 101
-                elif [[ $exit_code -eq 100 ]]; then
-                    echo "ℹ️  $PACKAGE_WITH_VERSION not handled specially, fallback to generic build"
-                    return 100
-                elif [[ $exit_code -eq 124 ]]; then
-                    echo "⏰ Timeout (>24h), skip package: $PACKAGE_WITH_VERSION"
-                    echo "$PACKAGE_WITH_VERSION" >> "$FAILED_LIST"
-                    deactivate || true
-                    return 124
-                else
-                    echo "❌ Special builder failed: $PACKAGE_WITH_VERSION"
-                    echo "$PACKAGE_WITH_VERSION" >> "$FAILED_LIST"
-                    deactivate || true
-                    return 1
-                fi
-            }
-
-            build_generic_package() {
-
-                NO_DEPS=$(python3 "$SCRIPT_DIR/../common_py/check_no_deps.py" "$PACKAGE_NAME")
-                echo "⚙️  Extra pip flags: $NO_DEPS"
-
-                # Rust/PyO3 packages such as uv may block forever on Cargo's global
-                # package-cache lock when multiple builders share ~/.cargo.  Keep the
-                # cache local to this build round and remove stale local lock files.
-                find "$CARGO_HOME" -type f \( -name '.package-cache' -o -name '*.lock' \) -delete 2>/dev/null || true
-
-                timeout --foreground --kill-after=60s "${BUILD_TIMEOUT_SECONDS}s" \
-                    pip wheel --verbose $NO_DEPS --no-binary "$PACKAGE_NAME" --wheel-dir="$WHEEL_CACHE_DIR" "$PACKAGE_WITH_VERSION"
-                build_exit_code=$?
-
-                if [[ $build_exit_code -eq 124 ]]; then
-                    echo "⏰ Timeout (>24h), skip package: $PACKAGE_WITH_VERSION"
-                    echo "$PACKAGE_WITH_VERSION" >> "$FAILED_LIST"
-                    deactivate || true
-                    return 124
-                elif [[ $build_exit_code -ne 0 ]]; then
-                    echo "❌ Failed: $PACKAGE_WITH_VERSION"
-                    echo "$PACKAGE_WITH_VERSION" >> "$FAILED_LIST"
-                    deactivate || true
-                    return 1
-                fi
-                return 0
-            }
-
-            # func select ---------------------------------------------
-            set +e  # 临时关闭 set -e
-
-            build_with_special_python
-            exit_code=$?
-
-            if [[ $exit_code -eq 0 ]]; then
-                echo "📦 $PACKAGE_WITH_VERSION handled specially"
-            elif [[ $exit_code -eq 101 ]]; then
-                echo "⏭️  Skipping $PACKAGE_WITH_VERSION (target platform wheel already exists)"
-                set -e
-                unload_env
-                continue
-            elif [[ $exit_code -eq 100 ]]; then
-                echo "build_generic_package starting........"
-                build_generic_package
-                build_result=$?
-
-                if [[ $build_result -ne 0 ]]; then
-                    set -e
-                    unload_env
-                    continue
-                fi
-            elif [[ $exit_code -eq 124 ]]; then
-                set -e
-                unload_env
-                continue
-            else
-                set -e
-                unload_env
-                continue
-            fi
-
-            set -e
-            # func select ---------------------------------------------
-
-            export THE_BUILD_PACKAGE_NAME="${PACKAGE_WITH_VERSION%%==*}"
-            run_upload_script "$PACKAGE_WITH_VERSION" || true
-
-            deactivate || true
-            sleep 2
-            unload_env
-            echo "✅ Done for $PACKAGE_WITH_VERSION"
-            echo "-------------------------------------------------------------------"
+            process_dependency_closure "$PACKAGE_WITH_VERSION" || true
         done < "$VERSION_FILE"
 
-        rm -rf "$VERSION_FILE" || echo "Failed to remove $VERSION_FILE"
-
+        rm -f "$VERSION_FILE" || echo "Failed to remove $VERSION_FILE"
     done < <(shuf "$ALL_PKGS_LIST")
 
     echo "🎉 All done!"
     if [ -s "$FAILED_LIST" ]; then
         echo "❗ Some packages failed:"
-        cat "$FAILED_LIST"
+        cat "$FAILED_LIST" || echo "⚠️ Failed to read failed list: $FAILED_LIST"
     else
         echo "✅ All packages built and processed successfully!"
     fi
 
-    # 更新第三方库
     echo "🔄 Updating third-party libraries..."
     (
         flock 200
