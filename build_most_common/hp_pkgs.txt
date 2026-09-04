@@ -37,7 +37,6 @@ uvicorn
 gunicorn
 pydantic
 scikit-image
-uv
 uvloop
 patchelf
 cmake
