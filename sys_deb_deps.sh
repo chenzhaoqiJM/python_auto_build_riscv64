@@ -31,7 +31,7 @@ case "$GLIBC_VERSION" in
             llvm-dev libacl1-dev unixodbc-dev freetds-dev graphviz graphviz-dev libxml2-dev libxmlsec1-dev
             gdal-bin libgdal-dev libdebuginfod-dev libunwind-dev libldap2-dev libsasl2-dev libsleef3 libsleef-dev libleveldb-dev
             protobuf-compiler libgflags-dev libgoogle-glog-dev libogre-1.9-dev libtesseract-dev libleptonica-dev screen
-            libusb-1.0-0-dev libsrtp2-dev libopenmpi-dev libgfortran-14-dev
+            libusb-1.0-0-dev libsrtp2-dev libopenmpi-dev libgfortran-14-dev libyaml-dev
             llvm-14-dev clang-14 llvm-15-dev clang-15 llvm-19-dev clang-19 libxml2 libxmlsec1t64-openssl libclang-19-dev libclang-15-dev
         )
         ;;
@@ -58,7 +58,7 @@ case "$GLIBC_VERSION" in
             llvm-dev libacl1-dev unixodbc-dev freetds-dev graphviz graphviz-dev libxml2-dev libxmlsec1-dev
             gdal-bin libgdal-dev libdebuginfod-dev libunwind-dev libldap2-dev libsasl2-dev libsleef3 libsleef-dev libleveldb-dev
             protobuf-compiler libgflags-dev libgoogle-glog-dev libogre-1.9-dev libtesseract-dev libleptonica-dev screen
-            libusb-1.0-0-dev libsrtp2-dev libopenmpi-dev libgfortran-14-dev
+            libusb-1.0-0-dev libsrtp2-dev libopenmpi-dev libgfortran-14-dev libyaml-dev
             llvm-14-dev clang-14 llvm-15-dev clang-15 llvm-19-dev clang-19 llvm-20-dev clang-20 libxml2 libxmlsec1t64-openssl libclang-19-dev libclang-15-dev
         )
         ;;
@@ -85,7 +85,7 @@ case "$GLIBC_VERSION" in
             llvm-dev libacl1-dev unixodbc-dev freetds-dev graphviz graphviz-dev libxmlsec1-dev
             gdal-bin libgdal-dev libdebuginfod-dev libunwind-dev libldap2-dev libsasl2-dev libsleef3 libsleef-dev libleveldb-dev
             protobuf-compiler libgflags-dev libgoogle-glog-dev libogre-1.9-dev libtesseract-dev libleptonica-dev screen
-            libusb-1.0-0-dev libsrtp2-dev libopenmpi-dev libgfortran-14-dev
+            libusb-1.0-0-dev libsrtp2-dev libopenmpi-dev libgfortran-14-dev libyaml-dev
             llvm-14-dev clang-14 llvm-19-dev clang-19 llvm-20-dev clang-20 llvm-21-dev clang-21 libclang-19-dev libclang-15-dev
             libxmlsec1-openssl1
         )
@@ -113,7 +113,7 @@ case "$GLIBC_VERSION" in
             llvm-dev libacl1-dev unixodbc-dev freetds-dev graphviz graphviz-dev libxmlsec1-dev
             gdal-bin libgdal-dev libdebuginfod-dev libunwind-dev libldap2-dev libsasl2-dev libsleef3 libsleef-dev libleveldb-dev
             protobuf-compiler libgflags-dev libgoogle-glog-dev libogre-1.9-dev libtesseract-dev libleptonica-dev screen
-            libusb-1.0-0-dev libsrtp2-dev libopenmpi-dev libgfortran-14-dev
+            libusb-1.0-0-dev libsrtp2-dev libopenmpi-dev libgfortran-14-dev libyaml-dev
             llvm-14-dev clang-14 llvm-19-dev clang-19 llvm-20-dev clang-20 llvm-21-dev clang-21 libclang-19-dev libclang-15-dev
             libxmlsec1-openssl1
         )
