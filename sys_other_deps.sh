@@ -4,8 +4,6 @@ set -u  # 使用未定义变量时报错
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-bash "$SCRIPT_DIR/test_scripts/get_pypic.sh"
-
 
 CPUINFO_CONTENT="$(cat /proc/cpuinfo)"
 
