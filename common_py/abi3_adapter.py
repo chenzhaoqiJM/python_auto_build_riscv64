@@ -2,7 +2,7 @@ import sys
 
 py_version = sys.version_info
 
-_OPENCV_ABI3_PYTHON_VERSIONS = {(3, 9), (3, 12), (3, 13), (3, 14)}
+_OPENCV_ABI3_PYTHON_VERSIONS = {(3, 9), (3, 10),(3, 11),(3, 12), (3, 13), (3, 14)}
 _USE_OPENCV_ABI3 = (
     py_version.major,
     py_version.minor,
