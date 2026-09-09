@@ -212,8 +212,8 @@ build_generic_package() {
 
 process_package() {
     local package_spec="$1"
+    local PACKAGE_NAME="$package_spec"
     local exit_code build_result upload_result
-    PACKAGE_NAME="$package_spec"
 
     echo "🔁 Processing $PACKAGE_NAME"
 
