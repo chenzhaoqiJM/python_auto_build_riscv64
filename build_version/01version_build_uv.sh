@@ -11,7 +11,7 @@ source "$SCRIPT_DIR/../common_func.sh"
 check_build_version
 
 ensure_uv
-uv python install "$BUILD_FOR_VERSION"
+select_uv_build_python
 
 echo "开始构建 Python $BUILD_FOR_VERSION ..."
 # 下面继续构建逻辑
@@ -105,11 +105,12 @@ if [ -d "$VENV_DIR" ]; then
 fi
 
 # 检查缓存虚拟环境
+remove_mismatched_venv_cache "$DIST_DIR/$VENV_NAME"
 if [ -d "$DIST_DIR/$VENV_NAME" ]; then
     echo "✅ Cached virtualenv ready at $DIST_DIR"
 else
     echo "📦 Creating new virtualenv at $VENV_DIR"
-    uv venv "$VENV_DIR" --python="$BUILD_FOR_VERSION"
+    uv venv "$VENV_DIR" --python="$UV_BUILD_PYTHON"
 
     source "$VENV_DIR/bin/activate"
     echo "⬆️  Installing pip & build tools..."
