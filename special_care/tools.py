@@ -50,7 +50,10 @@ def has_whl_in_gitlab_with_retry(package_spec, max_retries=5, delay=3):
     for attempt in range(1, max_retries + 1):
         try:
             return has_whl_in_gitlab(
-                package_name=pkg, version=ver, platform_tag=platform_tag
+                package_name=pkg,
+                version=ver,
+                platform_tag=platform_tag,
+                build_for_version=os.environ.get("BUILD_FOR_VERSION"),
             )
         except Exception as e:
             print(f"⚠️ GitLab 查询失败（第 {attempt} 次）：{e}")

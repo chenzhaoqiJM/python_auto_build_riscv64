@@ -58,6 +58,57 @@ def get_current_python_tag():
     minor = sys.version_info.minor
     return f"cp{major}{minor}"
 
+
+def get_target_python(build_for_version=None):
+    """Return the target CPython tag and whether it is free-threaded."""
+    requested = build_for_version or os.environ.get("BUILD_FOR_VERSION")
+    if requested:
+        free_threaded = requested.endswith("t")
+        version = requested[:-1] if free_threaded else requested
+        major, minor = version.split(".", 1)
+        return f"cp{major}{minor}", free_threaded
+
+    free_threaded = (
+        sys.version_info >= (3, 13)
+        and hasattr(sys, "_is_gil_enabled")
+        and not sys._is_gil_enabled()
+    )
+    return get_current_python_tag(), free_threaded
+
+
+def wheel_matches_python(filename, build_for_version=None):
+    """Check Python/ABI wheel fields against the requested CPython build."""
+    if not filename.endswith(".whl"):
+        return False
+
+    try:
+        _, python_field, abi_field, platform_field = filename[:-4].rsplit("-", 3)
+    except ValueError:
+        return False
+
+    python_tags = python_field.split(".")
+    abi_tags = abi_field.split(".")
+    platform_tags = platform_field.split(".")
+    python_tag, free_threaded = get_target_python(build_for_version)
+
+    # Pure-Python wheels are shared by regular and free-threaded interpreters.
+    if "none" in abi_tags and "any" in platform_tags:
+        return "py3" in python_tags or python_tag in python_tags
+
+    if free_threaded:
+        return python_tag in python_tags and f"{python_tag}t" in abi_tags
+
+    # A regular CPython must never consume a free-threaded ABI wheel.
+    if any(tag.endswith("t") for tag in abi_tags):
+        return False
+    if "abi3" in abi_tags:
+        return any(
+            tag.startswith("cp") and tag[2:].isdigit()
+            and int(tag[2:]) <= int(python_tag[2:])
+            for tag in python_tags
+        )
+    return python_tag in python_tags
+
 def wheel_matches_platform(filename, platform_tag):
     """检查 wheel 的 platform 字段是否匹配目标平台；any 适用于所有平台。"""
     if not filename.endswith(".whl"):
@@ -67,13 +118,12 @@ def wheel_matches_platform(filename, platform_tag):
 
 
 def has_whl_in_gitlab(package_name, version=None, project_id=33, token=None,
-                      platform_tag=None):
+                      platform_tag=None, build_for_version=None):
     """
     查询 GitLab 包仓库中是否存在当前 Python 版本可用的 .whl 文件。
     如果 version 为 None，则从 PyPI 获取最新版本号。
     """
     print("&&& 检查是否存在 whl ................")
-    python_tag = get_current_python_tag()
     gitlab_repo, config_token = load_gitlab_config()
     if token is None:
         token = config_token
@@ -117,23 +167,8 @@ def has_whl_in_gitlab(package_name, version=None, project_id=33, token=None,
                 fname = f.get("file_name", "")
                 if not wheel_matches_platform(fname, platform_tag):
                     continue
-                if sys.version_info.minor <= 12:
-                    if python_tag in fname or 'none' in fname or 'abi3' in fname:
-                        matching_whls.append(fname)
-                else:
-                    no_free_thread = sys._is_gil_enabled()
-                    python_tag_t = f"{python_tag}t"
-                    if no_free_thread:
-                        if (python_tag in fname and python_tag_t not in fname) or 'none' in fname or 'abi3' in fname:
-                            matching_whls.append(fname)
-                    else:
-                        major = sys.version_info.major
-                        minor = sys.version_info.minor
-                        python_tag_free_t = f"cp{major}{minor}t"
-                        if python_tag_free_t in fname or 'none' in fname or 'abi3' in fname:
-                            matching_whls.append(fname)
-
-
+                if wheel_matches_python(fname, build_for_version):
+                    matching_whls.append(fname)
 
             if matching_whls:
                 return True, matching_whls  # ✅ 找到匹配当前 Python 的 .whl
