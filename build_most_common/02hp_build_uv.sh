@@ -34,7 +34,8 @@ FAILED_LIST="$SCRIPT_DIR/failed_hp_$BUILD_FOR_VERSION.log"
 
 UPLOAD_SCRIPT="$SCRIPT_DIR/../common_py/00upload_with_repair.py"
 SPECIAL_BUILDER_SCRIPT="$SCRIPT_DIR/../special_care/special_builder.py"
-DEPENDENCY_PLAN_SCRIPT="$SCRIPT_DIR/../common_py/dependency_plan.py"
+NO_DEPS_SCRIPT="$SCRIPT_DIR/../common_py/check_no_deps.py"
+FETCH_VERSION_SCRIPT="$SCRIPT_DIR/../common_py/02get_latest_version.py"
 UPDATE_LIBS_SH="$SCRIPT_DIR/../update_libs.sh"
 
 # 单包构建超时（默认24小时）
@@ -151,8 +152,6 @@ else
     mkdir -p "$BUILD_TMPDIR" "$PIP_BUILD_TRACKER_DIR" "$WHEEL_CACHE_DIR" "$DIST_DIR" "$UV_CACHE_DIR" "$XDG_CACHE_HOME" "$CARGO_HOME"
 fi
 
-RESOLVER_PYTHON="$DIST_DIR/$VENV_NAME/bin/python"
-
 cleanup_package_workspace() {
     if command -v deactivate &>/dev/null; then
         deactivate || true
@@ -188,12 +187,14 @@ build_with_special_python() {
 }
 
 build_generic_package() {
-    # Runtime dependencies are resolved and built as independent queue items.
-    # This keeps every dependency under its own dynamic_env/special_care setup.
+    local no_deps
+    no_deps=$(python3 "$NO_DEPS_SCRIPT" "$PACKAGE_NAME")
+    echo "⚙️  Extra pip flags: $no_deps"
+
     find "$CARGO_HOME" -type f \( -name '.package-cache' -o -name '*.lock' \) -delete 2>/dev/null || true
 
     timeout --foreground --kill-after=60s "${BUILD_TIMEOUT_SECONDS}s" \
-        pip wheel --verbose --no-deps --no-binary "${PACKAGE_NAME%%==*}" \
+        pip wheel --verbose $no_deps --no-binary "${PACKAGE_NAME%%==*}" \
         --wheel-dir="$WHEEL_CACHE_DIR" "$PACKAGE_NAME"
     local build_exit_code=$?
 
@@ -213,15 +214,6 @@ process_package() {
     PACKAGE_NAME="$package_spec"
 
     echo "🔁 Processing $PACKAGE_NAME"
-
-    # Use the cached target interpreter for this read-only probe. This avoids
-    # copying a build environment for packages that official PyPI already serves.
-    if timeout --foreground --kill-after=30s 600s \
-        env -u PYTHONPATH "$RESOLVER_PYTHON" "$DEPENDENCY_PLAN_SCRIPT" \
-        official-wheel "$PACKAGE_NAME"; then
-        echo "⏭️  Skipping $PACKAGE_NAME (official PyPI has an installable wheel)"
-        return 0
-    fi
 
     echo "🧹 Cleaning tmp build and venv..."
     cleanup_package_workspace
@@ -294,65 +286,16 @@ while true; do
         exit 1
     fi
 
-    declare -A PACKAGE_RESULTS=()
-
-    while IFS= read -r REQUESTED_PACKAGE || [[ -n "$REQUESTED_PACKAGE" ]]; do
-        REQUESTED_PACKAGE=$(echo "$REQUESTED_PACKAGE" | xargs)
-        if [ -z "$REQUESTED_PACKAGE" ] || [[ "$REQUESTED_PACKAGE" == \#* ]]; then
+    while IFS= read -r PACKAGE_NAME || [[ -n "$PACKAGE_NAME" ]]; do
+        PACKAGE_NAME=$(echo "$PACKAGE_NAME" | xargs)
+        if [ -z "$PACKAGE_NAME" ] || [[ "$PACKAGE_NAME" == \#* ]]; then
             continue
         fi
 
-        echo "🔎 Resolving dependency closure for $REQUESTED_PACKAGE"
-        PLAN_OUTPUT=""
-        if ! PLAN_OUTPUT=$(env -u PYTHONPATH "$RESOLVER_PYTHON" \
-            "$DEPENDENCY_PLAN_SCRIPT" resolve "$REQUESTED_PACKAGE"); then
-            echo "❌ Failed to resolve dependency closure: $REQUESTED_PACKAGE"
-            record_failed "$REQUESTED_PACKAGE"
-            continue
-        fi
-        if [[ -z "$PLAN_OUTPUT" ]]; then
-            echo "❌ Empty dependency plan: $REQUESTED_PACKAGE"
-            record_failed "$REQUESTED_PACKAGE"
-            continue
-        fi
+        PACKAGE_NAME=$(python3 "$FETCH_VERSION_SCRIPT" "$PACKAGE_NAME")
 
-        mapfile -t BUILD_PLAN <<< "$PLAN_OUTPUT"
-        ROOT_FAILED=0
-        LAST_PLAN_INDEX=$((${#BUILD_PLAN[@]} - 1))
-
-        for PLAN_INDEX in "${!BUILD_PLAN[@]}"; do
-            PACKAGE_NAME="${BUILD_PLAN[$PLAN_INDEX]}"
-            if [[ -z "$PACKAGE_NAME" ]]; then
-                continue
-            fi
-
-            if [[ $PLAN_INDEX -eq $LAST_PLAN_INDEX && $ROOT_FAILED -ne 0 ]]; then
-                echo "⏭️  Not completing $REQUESTED_PACKAGE because a dependency failed"
-                break
-            fi
-
-            if [[ "${PACKAGE_RESULTS[$PACKAGE_NAME]:-}" == "success" ]]; then
-                echo "⏭️  Already satisfied in this round: $PACKAGE_NAME"
-                continue
-            elif [[ "${PACKAGE_RESULTS[$PACKAGE_NAME]:-}" == "failed" ]]; then
-                echo "❌ Dependency already failed in this round: $PACKAGE_NAME"
-                ROOT_FAILED=1
-                continue
-            fi
-
-            if process_package "$PACKAGE_NAME"; then
-                PACKAGE_RESULTS["$PACKAGE_NAME"]="success"
-            else
-                PACKAGE_RESULTS["$PACKAGE_NAME"]="failed"
-                ROOT_FAILED=1
-                record_failed "$PACKAGE_NAME"
-            fi
-        done
-
-        if [[ $ROOT_FAILED -ne 0 ]]; then
-            record_failed "$REQUESTED_PACKAGE"
-        else
-            echo "✅ Dependency closure complete for $REQUESTED_PACKAGE"
+        if ! process_package "$PACKAGE_NAME"; then
+            record_failed "$PACKAGE_NAME"
         fi
     done < "$PACKAGE_LIST"
 
