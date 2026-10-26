@@ -3,7 +3,7 @@
 # 用法: source arrow_env.sh <action> <package>
 
 # 要设置的组件
-ARROW_COMPONENTS=(Arrow ArrowSubstrait ArrowAcero ArrowCompute ArrowDataset Parquet)
+ARROW_COMPONENTS=(Arrow ArrowSubstrait ArrowAcero ArrowCompute ArrowDataset Parquet ArrowS3)
 
 # 维护激活状态
 : "${_ARROW_ENV_ACTIVE:=0}"
