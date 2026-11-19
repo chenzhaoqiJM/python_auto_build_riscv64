@@ -59,21 +59,29 @@ if [[ "$1" == "activate" ]]; then
     pkg="$2"
     opencv_version=$(get_opencv_prefix_by_pkg "$pkg")
 
-    # 根据 opencv 版本决定 Qt 安装路径
+    # 根据 opencv 版本决定 Qt 主版本和安装路径。
+    # 后续使用 Qt6 时，在对应分支同时设置主版本为 6 和 Qt6 安装路径。
+    # 源码的 patches/patchQtPlugins 也必须从同一 Qt 安装目录复制插件。
     if [[ "$opencv_version" == "4.13.0.90" ]]; then
+        _opencv_QT_MAJOR=5
         _opencv_INSTALL_PREFIX=/opt/Qt5.15.18
     elif [[ "$opencv_version" == "4.13.0.92" ]]; then
+        _opencv_QT_MAJOR=5
         _opencv_INSTALL_PREFIX=/opt/Qt5.15.18
     elif [[ "$opencv_version" == "5.0.0.93" ]]; then
+        _opencv_QT_MAJOR=5
         _opencv_INSTALL_PREFIX=/opt/Qt5.15.19
     elif [[ "$opencv_version" == "4.14.0.94" ]]; then
+        _opencv_QT_MAJOR=5
         _opencv_INSTALL_PREFIX=/opt/Qt5.15.19
     elif version_le "$opencv_version" "4.12.0.88"; then
+        _opencv_QT_MAJOR=5
         _opencv_INSTALL_PREFIX=/opt/Qt5.15.16
     else
+        _opencv_QT_MAJOR=5
         _opencv_INSTALL_PREFIX=/opt/Qt5.15.19  # 默认路径
     fi
-    echo "[opencvEnv] opencv version: $opencv_version, using Qt path: $_opencv_INSTALL_PREFIX"
+    echo "[opencvEnv] opencv version: $opencv_version, using Qt$_opencv_QT_MAJOR path: $_opencv_INSTALL_PREFIX"
 
     if [[ -z "$_opencv_INSTALL_PREFIX" ]]; then
         echo "[opencvEnv] No opencv path configured for package: $pkg"
@@ -122,9 +130,9 @@ if [[ "$1" == "activate" ]]; then
 
     # 根据版本设置 CMAKE_ARGS
     if version_le "$opencv_version" "4.10.0.84"; then
-        export CMAKE_ARGS="-Wno-error -DWITH_GTK=OFF -DWITH_QT=ON -DWITH_GTK_2_X=OFF -DPYTHON3_LIMITED_API=${PYTHON_LIMITED_API}"
+        export CMAKE_ARGS="-Wno-error -DWITH_GTK=OFF -DWITH_QT=${_opencv_QT_MAJOR} -DQt${_opencv_QT_MAJOR}_DIR=${_opencv_INSTALL_PREFIX}/lib/cmake/Qt${_opencv_QT_MAJOR} -DWITH_GTK_2_X=OFF -DPYTHON3_LIMITED_API=${PYTHON_LIMITED_API}"
     else
-        export CMAKE_ARGS="-DCMAKE_CXX_FLAGS=-march=rv64gcv_zvl256b -DCMAKE_C_FLAGS=-march=rv64gcv_zvl256b -Wno-error -DWITH_GTK=OFF -DWITH_QT=ON -DWITH_GTK_2_X=OFF -DPYTHON3_LIMITED_API=${PYTHON_LIMITED_API}"
+        export CMAKE_ARGS="-DCMAKE_CXX_FLAGS=-march=rv64gcv_zvl256b -DCMAKE_C_FLAGS=-march=rv64gcv_zvl256b -Wno-error -DWITH_GTK=OFF -DWITH_QT=${_opencv_QT_MAJOR} -DQt${_opencv_QT_MAJOR}_DIR=${_opencv_INSTALL_PREFIX}/lib/cmake/Qt${_opencv_QT_MAJOR} -DWITH_GTK_2_X=OFF -DPYTHON3_LIMITED_API=${PYTHON_LIMITED_API}"
     fi
 
     export QTDIR=$_opencv_INSTALL_PREFIX
